@@ -2887,81 +2887,81 @@ from xml.dom import minidom
 
 """
 Enhanced SMB-Scor3: A comprehensive tool for:
-  1) Logging to SQLite
-  2) SMB/Network enumeration
-  3) Impacket-based intensity enumeration
-  4) Parallel Nmap scanning
-  5) Metasploit usage via msfconsole
-  6) Vulnerability scoring with additional criteria
-  7) Charting final scores with a Matplotlib line plot
-  8) Web-based dashboard for reporting
-  9) Scheduled scanning and trend analysis
-  10) Enhanced vulnerability correlation with CVE lookup
-  11) Remediation guidance
-  12) Improved reporting with template system
-  13) Active Directory integration
-  14) Password policy assessment
-  15) Multi-format export options
+1) Logging to SQLite
+2) SMB/Network enumeration
+3) Impacket-based intensity enumeration
+4) Parallel Nmap scanning
+5) Metasploit usage via msfconsole
+6) Vulnerability scoring with additional criteria
+7) Charting final scores with a Matplotlib line plot
+8) Web-based dashboard for reporting
+9) Scheduled scanning and trend analysis
+10) Enhanced vulnerability correlation with CVE lookup
+11) Remediation guidance
+12) Improved reporting with template system
+13) Active Directory integration
+14) Password policy assessment
+15) Multi-format export options
 """
 
 
 # ================== 1) LOGGING (SQLite + Console) ==================
 
 class SQLiteHandler(logging.Handler):
-    """
-    A custom logging handler that writes log records to a SQLite database (logs table).
-    """
-    def __init__(self, db='smb_enum.db'):
-        super().__init__()
-        self.db = db
-        self._initialize_database()
+"""
+A custom logging handler that writes log records to a SQLite database (logs table).
+"""
+def __init__(self, db='smb_enum.db'):
+    super().__init__()
+    self.db = db
+    self._initialize_database()
 
-    def _initialize_database(self):
+def _initialize_database(self):
+    conn = sqlite3.connect(self.db)
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            level TEXT,
+            message TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+def emit(self, record):
+    try:
         conn = sqlite3.connect(self.db)
         c = conn.cursor()
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT,
-                level TEXT,
-                message TEXT
-            )
-        ''')
+        timestamp = self.formatTime(record, "%Y-%m-%d %H:%M:%S")
+        level = record.levelname
+        message = self.format(record)
+        c.execute(
+            "INSERT INTO logs (timestamp, level, message) VALUES (?, ?, ?)",
+            (timestamp, level, message)
+        )
         conn.commit()
         conn.close()
-
-    def emit(self, record):
-        try:
-            conn = sqlite3.connect(self.db)
-            c = conn.cursor()
-            timestamp = self.formatTime(record, "%Y-%m-%d %H:%M:%S")
-            level = record.levelname
-            message = self.format(record)
-            c.execute(
-                "INSERT INTO logs (timestamp, level, message) VALUES (?, ?, ?)",
-                (timestamp, level, message)
-            )
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            print(f"[DB LOG FAILURE] {e}")
+    except Exception as e:
+        print(f"[DB LOG FAILURE] {e}")
 
 def setup_logger(db_path="smb_enum.db"):
-    logger = logging.getLogger("SMBLogger")
-    logger.setLevel(logging.INFO)
+logger = logging.getLogger("SMBLogger")
+logger.setLevel(logging.INFO)
 
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
-    logger.addHandler(console_handler)
+# Console handler
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
+logger.addHandler(console_handler)
 
-    # SQLite handler
-    sqlite_handler = SQLiteHandler(db_path)
-    # Keep message format short in DB
-    sqlite_handler.setFormatter(logging.Formatter("%(message)s"))
-    logger.addHandler(sqlite_handler)
+# SQLite handler
+sqlite_handler = SQLiteHandler(db_path)
+# Keep message format short in DB
+sqlite_handler.setFormatter(logging.Formatter("%(message)s"))
+logger.addHandler(sqlite_handler)
 
-    return logger
+return logger
 
 
 # ================== 2) SETUP & SUPPORT FUNCTIONS ==================
@@ -2969,686 +2969,540 @@ def setup_logger(db_path="smb_enum.db"):
 logger = None  # We'll set this in main()
 
 def check_dependencies():
-    """Check and install required Python libraries and external tools."""
+"""Check and install required Python libraries and external tools."""
+try:
+    import impacket
+    from impacket.smbconnection import SMBConnection
+    from impacket.dcerpc.v5 import wkst, srvs
+except ImportError:
+    if logger:
+        logger.info("[*] Installing impacket library...")
+    subprocess.run(["pip", "install", "impacket"], check=True)
+    from impacket.smbconnection import SMBConnection
+    from impacket.dcerpc.v5 import wkst, srvs
+
+# Check for other Python dependencies
+python_deps = ["pandas", "matplotlib", "jinja2", "flask", "requests"]
+for dep in python_deps:
     try:
-        import impacket
-        from impacket.smbconnection import SMBConnection
-        from impacket.dcerpc.v5 import wkst, srvs
+        __import__(dep)
     except ImportError:
         if logger:
-            logger.info("[*] Installing impacket library...")
-        subprocess.run(["pip", "install", "impacket"], check=True)
-        from impacket.smbconnection import SMBConnection
-        from impacket.dcerpc.v5 import wkst, srvs
+            logger.info(f"[*] Installing {dep} library...")
+        subprocess.run(["pip", "install", dep], check=True)
 
-    # Check for other Python dependencies
-    python_deps = ["pandas", "matplotlib", "jinja2", "flask", "requests"]
-    for dep in python_deps:
+# Check for external tools
+required_tools = ["nmap", "crackmapexec", "enum4linux", "msfconsole"]
+for tool in required_tools:
+    if not shutil.which(tool):
+        if logger:
+            logger.info(f"[*] Installing missing tool: {tool}")
         try:
-            __import__(dep)
-        except ImportError:
+            subprocess.run(["apt-get", "update", "-y"], check=True)
+            subprocess.run(["apt-get", "install", "-y", tool], check=True)
+        except Exception as e:
             if logger:
-                logger.info(f"[*] Installing {dep} library...")
-            subprocess.run(["pip", "install", dep], check=True)
-
-    # Check for external tools
-    required_tools = ["nmap", "crackmapexec", "enum4linux", "msfconsole"]
-    for tool in required_tools:
-        if not shutil.which(tool):
-            if logger:
-                logger.info(f"[*] Installing missing tool: {tool}")
-            try:
-                subprocess.run(["apt-get", "update", "-y"], check=True)
-                subprocess.run(["apt-get", "install", "-y", tool], check=True)
-            except Exception as e:
-                if logger:
-                    logger.warning(f"[!] Failed to install {tool}: {e}")
+                logger.warning(f"[!] Failed to install {tool}: {e}")
 
 
 # ================== 3) SMB DISCOVERY & ENUMERATION ==================
 
 def discover_smb_hosts(network_cidr):
-    """
-    Finds SMB hosts (port 445) in a given network range using nmap or fallback socket scan.
-    Returns a list of IPs.
-    """
-    logger.info(f"[*] Scanning network {network_cidr} for SMB hosts...")
-    hosts = []
+"""
+Finds SMB hosts (port 445) in a given network range using nmap or fallback socket scan.
+Returns a list of IPs.
+"""
+logger.info(f"[*] Scanning network {network_cidr} for SMB hosts...")
+hosts = []
 
-    # Attempt nmap
-    try:
-        nm_proc = subprocess.run(
-            ["nmap", "-p", "445", "--open", "-n", "-T4", "-oG", "-", network_cidr],
-            capture_output=True, text=True, check=True
-        )
-        for line in nm_proc.stdout.splitlines():
-            if "/open/tcp//microsoft-ds" in line or "/open/tcp//netbios-ssn" in line:
-                parts = line.split()
-                if len(parts) > 1:
-                    ip = parts[1]
+# Attempt nmap
+try:
+    nm_proc = subprocess.run(
+        ["nmap", "-p", "445", "--open", "-n", "-T4", "-oG", "-", network_cidr],
+        capture_output=True, text=True, check=True
+    )
+    for line in nm_proc.stdout.splitlines():
+        if "/open/tcp//microsoft-ds" in line or "/open/tcp//netbios-ssn" in line:
+            parts = line.split()
+            if len(parts) > 1:
+                ip = parts[1]
+                hosts.append(ip)
+except subprocess.CalledProcessError:
+    logger.warning("[!] Nmap scan failed, falling back to manual scan.")
+    base_net = network_cidr.rsplit('.', 1)[0] + '.'
+    for i in range(1, 255):
+        ip = base_net + str(i)
+        for port in [139, 445]:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(0.5)
+                result = sock.connect_ex((ip, port))
+                sock.close()
+                if result == 0:
                     hosts.append(ip)
-    except subprocess.CalledProcessError:
-        logger.warning("[!] Nmap scan failed, falling back to manual scan.")
-        base_net = network_cidr.rsplit('.', 1)[0] + '.'
-        for i in range(1, 255):
-            ip = base_net + str(i)
-            for port in [139, 445]:
-                try:
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    sock.settimeout(0.5)
-                    result = sock.connect_ex((ip, port))
-                    sock.close()
-                    if result == 0:
-                        hosts.append(ip)
-                        break
-                except socket.error:
-                    continue
+                    break
+            except socket.error:
+                continue
 
-    unique_hosts = sorted(set(hosts))
-    for ip in unique_hosts:
-        logger.info(f"Host {ip} has SMB service.")
-    return unique_hosts
+unique_hosts = sorted(set(hosts))
+for ip in unique_hosts:
+    logger.info(f"Host {ip} has SMB service.")
+return unique_hosts
 
 def enumerate_lan_hosts(hosts):
-    """
-    Enumerates each discovered SMB host for:
-      - Domain/workgroup info (CME)
-      - Shares (anonymous)
-      - Users (lookupsid or enum4linux)
-      - Attempt hash dumping
-      - Basic NTLM hash pattern check
-    """
-    host_data = {}
-    
-    for ip in hosts:
-        logger.info(f"[*] Enumerating {ip} (LAN-wide logic)...")
-        host_data[ip] = {
-            "vulnerabilities": [],
-            "open_ports": [],
-            "plaintext_creds": 0,
-            "missing_patches": 0,
-            "host": ip
-        }
+"""
+Enumerates each discovered SMB host for:
+  - Domain/workgroup info (CME)
+  - Shares (anonymous)
+  - Users (lookupsid or enum4linux)
+  - Attempt hash dumping
+  - Basic NTLM hash pattern check
+"""
+host_data = {}
 
-        # a) Basic info (CME)
-        try:
-            cme = subprocess.run(["crackmapexec", "smb", ip],
-                                 capture_output=True, text=True, check=True)
-            logger.info("[crackmapexec info]\n" + cme.stdout.strip())
-            
-            # Extract data from CME output
-            cme_out = cme.stdout.strip()
-            host_data[ip]["cme_output"] = cme_out
-            
-            # Check for SMBv1
-            if "SMBv1:True" in cme_out:
-                host_data[ip]["vulnerabilities"].append("SMBv1 Enabled")
-            
-            # Add ports
-            host_data[ip]["open_ports"].append(445)  # If CME works, 445 is open
-            
-        except Exception:
-            logger.warning("[!] crackmapexec failed or not installed for host %s.", ip)
+for ip in hosts:
+    logger.info(f"[*] Enumerating {ip} (LAN-wide logic)...")
+    host_data[ip] = {
+        "vulnerabilities": [],
+        "open_ports": [],
+        "plaintext_creds": 0,
+        "missing_patches": 0,
+        "host": ip
+    }
 
-        # b) List shares (anonymous) with Impacket
-        try:
-            from impacket.smbconnection import SMBConnection
-            conn = SMBConnection(ip, ip)
-            conn.login('', '')  # Attempt anonymous
-            shares = conn.listShares()
-            msg = "[Shares (anonymous) via Impacket]:\n"
-            
-            host_data[ip]["shares"] = []
-            for share in shares:
-                share_name = share['shi1_netname'].rstrip('\x00')
-                msg += f"  {share_name}\n"
-                host_data[ip]["shares"].append(share_name)
-                
-                # Check for non-default shares that allow anonymous access
-                if share_name not in ["ADMIN$", "C$", "IPC$", "NETLOGON", "SYSVOL"]:
-                    try:
-                        conn.listPath(share_name, '*')
-                        host_data[ip]["vulnerabilities"].append(f"Anonymous Access to {share_name}")
-                    except:
-                        pass
-                        
-            logger.info(msg)
-            conn.logoff()
-        except Exception:
-            # fallback smbclient
-            smbclient_cmd = ["smbclient", "-L", f"//{ip}/", "-N", "-g"]
-            smb = subprocess.run(smbclient_cmd, capture_output=True, text=True)
-            logger.info("[Shares (anonymous) via smbclient]:\n" + smb.stdout)
+    # a) Basic info (CME)
+    try:
+        cme = subprocess.run(["crackmapexec", "smb", ip],
+                             capture_output=True, text=True, check=True)
+        logger.info("[crackmapexec info]\n" + cme.stdout.strip())
+        
+        # Extract data from CME output
+        cme_out = cme.stdout.strip()
+        host_data[ip]["cme_output"] = cme_out
+        
+        # Check for SMBv1
+        if "SMBv1:True" in cme_out:
+            host_data[ip]["vulnerabilities"].append("SMBv1 Enabled")
+        
+        # Add ports
+        host_data[ip]["open_ports"].append(445)  # If CME works, 445 is open
+        
+    except Exception:
+        logger.warning("[!] crackmapexec failed or not installed for host %s.", ip)
 
-        # c) Enumerate users
-        try:
-            sid_cmd = ["lookupsid.py", f"''@{ip}"]
-            sid_result = subprocess.run(" ".join(sid_cmd), shell=True, capture_output=True, text=True)
-            logger.info("[User accounts (RID lookup)]:\n" + sid_result.stdout.strip())
+    # b) List shares (anonymous) with Impacket
+    try:
+        from impacket.smbconnection import SMBConnection
+        conn = SMBConnection(ip, ip)
+        conn.login('', '')  # Attempt anonymous
+        shares = conn.listShares()
+        msg = "[Shares (anonymous) via Impacket]:\n"
+        
+        host_data[ip]["shares"] = []
+        for share in shares:
+            share_name = share['shi1_netname'].rstrip('\x00')
+            msg += f"  {share_name}\n"
+            host_data[ip]["shares"].append(share_name)
             
-            # Extract user data
-            host_data[ip]["users"] = []
-            for line in sid_result.stdout.strip().splitlines():
-                if "User:" in line:
-                    user = line.split("User:")[1].strip()
-                    host_data[ip]["users"].append(user)
+            # Check for non-default shares that allow anonymous access
+            if share_name not in ["ADMIN$", "C$", "IPC$", "NETLOGON", "SYSVOL"]:
+                try:
+                    conn.listPath(share_name, '*')
+                    host_data[ip]["vulnerabilities"].append(f"Anonymous Access to {share_name}")
+                except:
+                    pass
                     
-        except Exception:
-            enum4linux_cmd = ["enum4linux", "-U", ip]
-            enum4 = subprocess.run(enum4linux_cmd, capture_output=True, text=True)
-            logger.info("[Users via enum4linux]:\n" + enum4.stdout.strip())
+        logger.info(msg)
+        conn.logoff()
+    except Exception:
+        # fallback smbclient
+        smbclient_cmd = ["smbclient", "-L", f"//{ip}/", "-N", "-g"]
+        smb = subprocess.run(smbclient_cmd, capture_output=True, text=True)
+        logger.info("[Shares (anonymous) via smbclient]:\n" + smb.stdout)
 
-        # d) Attempt to retrieve NTLM hashes (SAM)
-        try:
-            sam = subprocess.run(["crackmapexec", "smb", ip, "--sam"],
-                                 capture_output=True, text=True, check=True)
-            logger.info("[SAM dump output]:\n" + sam.stdout.strip())
+    # c) Enumerate users
+    try:
+        sid_cmd = ["lookupsid.py", f"''@{ip}"]
+        sid_result = subprocess.run(" ".join(sid_cmd), shell=True, capture_output=True, text=True)
+        logger.info("[User accounts (RID lookup)]:\n" + sid_result.stdout.strip())
+        
+        # Extract user data
+        host_data[ip]["users"] = []
+        for line in sid_result.stdout.strip().splitlines():
+            if "User:" in line:
+                user = line.split("User:")[1].strip()
+                host_data[ip]["users"].append(user)
+                
+    except Exception:
+        enum4linux_cmd = ["enum4linux", "-U", ip]
+        enum4 = subprocess.run(enum4linux_cmd, capture_output=True, text=True)
+        logger.info("[Users via enum4linux]:\n" + enum4.stdout.strip())
 
-            # Quick pattern check
-            for line in sam.stdout.splitlines():
-                if re.search(r'[0-9A-Fa-f]{32}:[0-9A-Fa-f]{32}', line):
-                    logger.info(f"[NTLM Hash Found] {ip} => {line}")
-                    host_data[ip]["vulnerabilities"].append("Accessible NTLM Hashes")
+    # d) Attempt to retrieve NTLM hashes (SAM)
+    try:
+        sam = subprocess.run(["crackmapexec", "smb", ip, "--sam"],
+                             capture_output=True, text=True, check=True)
+        logger.info("[SAM dump output]:\n" + sam.stdout.strip())
 
-        except Exception:
-            # fallback
-            rpc = subprocess.run(["rpcclient", "-U", "", "-N", ip, "-c", "lsaquery"],
-                                 capture_output=True, text=True)
-            logger.info("[rpcclient lsaquery output]:\n" + rpc.stdout.strip())
-    
-    return host_data
+        # Quick pattern check
+        for line in sam.stdout.splitlines():
+            if re.search(r'[0-9A-Fa-f]{32}:[0-9A-Fa-f]{32}', line):
+                logger.info(f"[NTLM Hash Found] {ip} => {line}")
+                host_data[ip]["vulnerabilities"].append("Accessible NTLM Hashes")
+
+    except Exception:
+        # fallback
+        rpc = subprocess.run(["rpcclient", "-U", "", "-N", ip, "-c", "lsaquery"],
+                             capture_output=True, text=True)
+        logger.info("[rpcclient lsaquery output]:\n" + rpc.stdout.strip())
+
+return host_data
 
 
 # ================== 4) INTENSITY-BASED IMPACKET ENUM ==================
 
 class IntensityLevel(Enum):
-    LOW = 1
-    MEDIUM = 2
-    HIGH = 3
+LOW = 1
+MEDIUM = 2
+HIGH = 3
 
 def enumerate_with_intensity(target, username, password, domain, intensity, host_data=None):
-    """
-    Uses Impacket-based enumeration for a single target based on intensity.
-    Now updates host_data dictionary with findings.
-    """
-    logger.info(f"[+] Starting {intensity.name} enumeration for {target}")
-    
-    if host_data is None:
-        host_data = {
-            "vulnerabilities": [],
-            "open_ports": [445],  # If we're doing SMB enumeration, 445 is open
-            "plaintext_creds": 0,
-            "missing_patches": 0,
-            "host": target
-        }
-    
-    try:
-        from impacket.smbconnection import SMBConnection
-        from impacket.dcerpc.v5 import wkst, srvs
-        
-        conn = SMBConnection(target, target)
-        conn.login(username, password, domain)
-        
-        # If we succeed with credentials, add to plaintext credentials count
-        if username and password and username != '' and password != '':
-            host_data["plaintext_creds"] += 1
-            logger.info(f"[!] Valid credentials found: {domain}\\{username}:{password}")
+"""
+Uses Impacket-based enumeration for a single target based on intensity.
+Now updates host_data dictionary with findings.
+"""
+logger.info(f"[+] Starting {intensity.name} enumeration for {target}")
 
-        if intensity == IntensityLevel.LOW:
-            logger.info("[LOW] Listing SMB shares...")
-            shares = conn.listShares()
-            host_data["shares"] = []
-            for share in shares:
-                share_name = share['shi1_netname']
-                logger.info(f"    Share found: {share_name}")
-                host_data["shares"].append(share_name)
-                
-                # Check for non-default shares
-                if share_name not in ["ADMIN$", "C$", "IPC$", "NETLOGON", "SYSVOL"]:
-                    try:
-                        conn.listPath(share_name, '*')
-                        host_data["vulnerabilities"].append(f"Access to {share_name} share")
-                    except:
-                        pass
+if host_data is None:
+    host_data = {
+        "vulnerabilities": [],
+        "open_ports": [445],  # If we're doing SMB enumeration, 445 is open
+        "plaintext_creds": 0,
+        "missing_patches": 0,
+        "host": target
+    }
 
-        elif intensity == IntensityLevel.MEDIUM:
-            logger.info("[MEDIUM] Enumerating logged-on users...")
+try:
+    from impacket.smbconnection import SMBConnection
+    from impacket.dcerpc.v5 import wkst, srvs
+    
+    conn = SMBConnection(target, target)
+    conn.login(username, password, domain)
+    
+    # If we succeed with credentials, add to plaintext credentials count
+    if username and password and username != '' and password != '':
+        host_data["plaintext_creds"] += 1
+        logger.info(f"[!] Valid credentials found: {domain}\\{username}:{password}")
+
+    if intensity == IntensityLevel.LOW:
+        logger.info("[LOW] Listing SMB shares...")
+        shares = conn.listShares()
+        host_data["shares"] = []
+        for share in shares:
+            share_name = share['shi1_netname']
+            logger.info(f"    Share found: {share_name}")
+            host_data["shares"].append(share_name)
+            
+            # Check for non-default shares
+            if share_name not in ["ADMIN$", "C$", "IPC$", "NETLOGON", "SYSVOL"]:
+                try:
+                    conn.listPath(share_name, '*')
+                    host_data["vulnerabilities"].append(f"Access to {share_name} share")
+                except:
+                    pass
+
+    elif intensity == IntensityLevel.MEDIUM:
+        logger.info("[MEDIUM] Enumerating logged-on users...")
+        dce = conn.getDCE()
+        dce.connect()
+        dce.bind(wkst.MSRPC_UUID_WKST)
+        request = wkst.NetrWkstaUserEnum()
+        response = dce.request(request)
+        
+        host_data["logged_on_users"] = []
+        for user in response['UserInfo']['WkstaUserInfo']:
+            username = user['wkui1_username']
+            logger.info(f"    Logged-on User: {username}")
+            host_data["logged_on_users"].append(username)
+        
+        # Check for SMBv1 protocol
+        server_os = conn.getServerOS()
+        if "Windows 7" in server_os or "Windows Server 2008" in server_os:
+            host_data["vulnerabilities"].append("Potential SMBv1 System (EOL OS)")
+        
+        # Check for MS17-010
+        try:
+            ms17_010_cmd = ["crackmapexec", "smb", target, "-u", username, "-p", password, "-M", "ms17-010"]
+            ms17_output = subprocess.run(ms17_010_cmd, capture_output=True, text=True)
+            if "MS17-010" in ms17_output.stdout and "VULNERABLE" in ms17_output.stdout:
+                host_data["vulnerabilities"].append("MS17-010 (EternalBlue)")
+                logger.warning(f"[!] {target} is VULNERABLE to MS17-010!")
+        except:
+            logger.warning(f"Could not check MS17-010 on {target}")
+
+    elif intensity == IntensityLevel.HIGH:
+        logger.info("[HIGH] Advanced enumeration...")
+
+        # 1) Sessions
+        try:
+            logger.info("Enumerating active sessions...")
             dce = conn.getDCE()
             dce.connect()
-            dce.bind(wkst.MSRPC_UUID_WKST)
-            request = wkst.NetrWkstaUserEnum()
+            dce.bind(srvs.MSRPC_UUID_SRVS)
+            request = srvs.NetrSessionEnum()
             response = dce.request(request)
             
-            host_data["logged_on_users"] = []
-            for user in response['UserInfo']['WkstaUserInfo']:
-                username = user['wkui1_username']
-                logger.info(f"    Logged-on User: {username}")
-                host_data["logged_on_users"].append(username)
-            
-            # Check for SMBv1 protocol
-            server_os = conn.getServerOS()
-            if "Windows 7" in server_os or "Windows Server 2008" in server_os:
-                host_data["vulnerabilities"].append("Potential SMBv1 System (EOL OS)")
-            
-            # Check for MS17-010
-            try:
-                ms17_010_cmd = ["crackmapexec", "smb", target, "-u", username, "-p", password, "-M", "ms17-010"]
-                ms17_output = subprocess.run(ms17_010_cmd, capture_output=True, text=True)
-                if "MS17-010" in ms17_output.stdout and "VULNERABLE" in ms17_output.stdout:
-                    host_data["vulnerabilities"].append("MS17-010 (EternalBlue)")
-                    logger.warning(f"[!] {target} is VULNERABLE to MS17-010!")
-            except:
-                logger.warning(f"Could not check MS17-010 on {target}")
+            host_data["active_sessions"] = []
+            if response['SessionInfo']['Level'] == 10:
+                for session in response['SessionInfo']['SessionInfo10']:
+                    session_user = session['sesi10_username']
+                    session_client = session['sesi10_cname']
+                    logger.info(
+                        f"    Session => User: {session_user}, "
+                        f"Client: {session_client}, Time: {session['sesi10_time']}"
+                    )
+                    host_data["active_sessions"].append({
+                        "user": session_user,
+                        "client": session_client,
+                        "time": session['sesi10_time']
+                    })
+            else:
+                logger.info("    No active sessions found.")
+        except Exception as e:
+            logger.warning(f"Error enumerating sessions on {target}: {e}")
 
-        elif intensity == IntensityLevel.HIGH:
-            logger.info("[HIGH] Advanced enumeration...")
-
-            # 1) Sessions
-            try:
-                logger.info("Enumerating active sessions...")
-                dce = conn.getDCE()
-                dce.connect()
-                dce.bind(srvs.MSRPC_UUID_SRVS)
-                request = srvs.NetrSessionEnum()
-                response = dce.request(request)
-                
-                host_data["active_sessions"] = []
-                if response['SessionInfo']['Level'] == 10:
-                    for session in response['SessionInfo']['SessionInfo10']:
-                        session_user = session['sesi10_username']
-                        session_client = session['sesi10_cname']
-                        logger.info(
-                            f"    Session => User: {session_user}, "
-                            f"Client: {session_client}, Time: {session['sesi10_time']}"
-                        )
-                        host_data["active_sessions"].append({
-                            "user": session_user,
-                            "client": session_client,
-                            "time": session['sesi10_time']
-                        })
-                else:
-                    logger.info("    No active sessions found.")
-            except Exception as e:
-                logger.warning(f"Error enumerating sessions on {target}: {e}")
-
-            # 2) Check for writable/exploitable shares
-            logger.info("Checking for writable shares...")
-            try:
-                shares = conn.listShares()
-                host_data["writable_shares"] = []
-                for share in shares:
-                    share_name = share['shi1_netname']
-                    if not share_name.endswith('$'):
+        # 2) Check for writable/exploitable shares
+        logger.info("Checking for writable shares...")
+        try:
+            shares = conn.listShares()
+            host_data["writable_shares"] = []
+            for share in shares:
+                share_name = share['shi1_netname']
+                if not share_name.endswith('$'):
+                    try:
+                        conn.listPath(share_name, '*')
+                        logger.info(f"    Share '{share_name}' is accessible/writable.")
+                        host_data["writable_shares"].append(share_name)
+                        
+                        # Try to write a test file
+                        test_file = "smb_write_test.txt"
                         try:
-                            conn.listPath(share_name, '*')
-                            logger.info(f"    Share '{share_name}' is accessible/writable.")
-                            host_data["writable_shares"].append(share_name)
-                            
-                            # Try to write a test file
-                            test_file = "smb_write_test.txt"
-                            try:
-                                conn.putFile(share_name, test_file, b"SMB write test")
-                                logger.warning(f"[!] Share '{share_name}' allows file writes!")
-                                host_data["vulnerabilities"].append(f"Writable Share: {share_name}")
-                                # Clean up test file
-                                conn.deleteFile(share_name, test_file)
-                            except:
-                                pass
-                        except Exception:
-                            logger.info(f"    Share '{share_name}' is NOT accessible.")
-            except Exception as e:
-                logger.warning(f"Error checking shares on {target}: {e}")
+                            conn.putFile(share_name, test_file, b"SMB write test")
+                            logger.warning(f"[!] Share '{share_name}' allows file writes!")
+                            host_data["vulnerabilities"].append(f"Writable Share: {share_name}")
+                            # Clean up test file
+                            conn.deleteFile(share_name, test_file)
+                        except:
+                            pass
+                    except Exception:
+                        logger.info(f"    Share '{share_name}' is NOT accessible.")
+        except Exception as e:
+            logger.warning(f"Error checking shares on {target}: {e}")
 
-            # 3) Enumerate services/server info
-            logger.info("Enumerating services/server info...")
+        # 3) Enumerate services/server info
+        logger.info("Enumerating services/server info...")
+        try:
+            dce.bind(srvs.MSRPC_UUID_SRVS)
+            request = srvs.NetrServerGetInfo()
+            response = dce.request(request)
+            server_info = response['ServerInfo']['ServerName']
+            logger.info(f"    Server Name: {server_info}")
+            host_data["server_name"] = server_info
+            
+            # Check for additional protocols
+            server_os = conn.getServerOS()
+            host_data["server_os"] = server_os
+            logger.info(f"    Server OS: {server_os}")
+            
+            # Check for potentially vulnerable configurations
+            if "Windows XP" in server_os or "Windows Server 2003" in server_os:
+                host_data["vulnerabilities"].append("End-of-Life OS")
+                host_data["missing_patches"] += 5  # Heavily penalize EOL systems
+            elif "Windows 7" in server_os or "Windows Server 2008" in server_os:
+                host_data["vulnerabilities"].append("End-of-Support OS")
+                host_data["missing_patches"] += 3
+            
+            # Run OS-specific vulnerability checks
             try:
-                dce.bind(srvs.MSRPC_UUID_SRVS)
-                request = srvs.NetrServerGetInfo()
-                response = dce.request(request)
-                server_info = response['ServerInfo']['ServerName']
-                logger.info(f"    Server Name: {server_info}")
-                host_data["server_name"] = server_info
+                vuln_checks = [
+                    {"name": "MS17-010", "cmd": ["crackmapexec", "smb", target, "-u", username, "-p", password, "-M", "ms17-010"]},
+                    {"name": "SMB Signing", "cmd": ["crackmapexec", "smb", target, "-u", username, "-p", password, "--gen-relay-list", "/dev/null"]}
+                ]
                 
-                # Check for additional protocols
-                server_os = conn.getServerOS()
-                host_data["server_os"] = server_os
-                logger.info(f"    Server OS: {server_os}")
-                
-                # Check for potentially vulnerable configurations
-                if "Windows XP" in server_os or "Windows Server 2003" in server_os:
-                    host_data["vulnerabilities"].append("End-of-Life OS")
-                    host_data["missing_patches"] += 5  # Heavily penalize EOL systems
-                elif "Windows 7" in server_os or "Windows Server 2008" in server_os:
-                    host_data["vulnerabilities"].append("End-of-Support OS")
-                    host_data["missing_patches"] += 3
-                
-                # Run OS-specific vulnerability checks
-                try:
-                    vuln_checks = [
-                        {"name": "MS17-010", "cmd": ["crackmapexec", "smb", target, "-u", username, "-p", password, "-M", "ms17-010"]},
-                        {"name": "SMB Signing", "cmd": ["crackmapexec", "smb", target, "-u", username, "-p", password, "--gen-relay-list", "/dev/null"]}
-                    ]
-                    
-                    for check in vuln_checks:
-                        check_output = subprocess.run(check["cmd"], capture_output=True, text=True)
-                        if check["name"] == "MS17-010" and "VULNERABLE" in check_output.stdout:
-                            host_data["vulnerabilities"].append("MS17-010 (EternalBlue)")
-                        elif check["name"] == "SMB Signing" and "SMB signing is disabled" in check_output.stdout:
-                            host_data["vulnerabilities"].append("SMB Signing Disabled")
-                except Exception as e:
-                    logger.warning(f"Error during vulnerability checks on {target}: {e}")
-                    
+                for check in vuln_checks:
+                    check_output = subprocess.run(check["cmd"], capture_output=True, text=True)
+                    if check["name"] == "MS17-010" and "VULNERABLE" in check_output.stdout:
+                        host_data["vulnerabilities"].append("MS17-010 (EternalBlue)")
+                    elif check["name"] == "SMB Signing" and "SMB signing is disabled" in check_output.stdout:
+                        host_data["vulnerabilities"].append("SMB Signing Disabled")
             except Exception as e:
-                logger.warning(f"Error enumerating services on {target}: {e}")
-
-            # 4) Try to obtain patch level
-            try:
-                wmi_cmd = ["wmic", "-U", f"{domain}/{username}%{password}", f"//{target}", "qfe", "list", "brief"]
-                wmi_output = subprocess.run(wmi_cmd, capture_output=True, text=True)
+                logger.warning(f"Error during vulnerability checks on {target}: {e}")
                 
-                if wmi_output.returncode == 0:
-                    logger.info("Patch information retrieved")
-                    
-                    # Look for recent security patches
-                    if "KB5022282" not in wmi_output.stdout:  # Example recent security patch
-                        host_data["missing_patches"] += 1
-                else:
-                    logger.warning(f"Could not retrieve patch information from {target}")
-            except Exception as e:
-                logger.warning(f"Error checking patches on {target}: {e}")
+        except Exception as e:
+            logger.warning(f"Error enumerating services on {target}: {e}")
 
-        conn.close()
+        # 4) Try to obtain patch level
+        try:
+            wmi_cmd = ["wmic", "-U", f"{domain}/{username}%{password}", f"//{target}", "qfe", "list", "brief"]
+            wmi_output = subprocess.run(wmi_cmd, capture_output=True, text=True)
+            
+            if wmi_output.returncode == 0:
+                logger.info("Patch information retrieved")
+                
+                # Look for recent security patches
+                if "KB5022282" not in wmi_output.stdout:  # Example recent security patch
+                    host_data["missing_patches"] += 1
+            else:
+                logger.warning(f"Could not retrieve patch information from {target}")
+        except Exception as e:
+            logger.warning(f"Error checking patches on {target}: {e}")
 
-    except Exception as e:
-        logger.error(f"Error during Impacket enumeration of {target}: {e}")
-    
-    return host_data
+    conn.close()
+
+except Exception as e:
+    logger.error(f"Error during Impacket enumeration of {target}: {e}")
+
+return host_data
 
 
 # ================== 5) ADVANCED PARALLEL NMAP ==================
 
 def log_nmap_scan_to_db(db_path, target, command, xml_path):
-    """
-    Insert an Nmap scan record into the nmap_scans table.
-    If the table doesn't exist, create it.
-    """
-    conn = sqlite3.connect(db_path)
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS nmap_scans (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            target TEXT,
-            command TEXT,
-            xml_path TEXT
-        )
-    ''')
-    conn.commit()
+"""
+Insert an Nmap scan record into the nmap_scans table.
+If the table doesn't exist, create it.
+"""
+conn = sqlite3.connect(db_path)
+c = conn.cursor()
+c.execute('''
+    CREATE TABLE IF NOT EXISTS nmap_scans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT,
+        target TEXT,
+        command TEXT,
+        xml_path TEXT
+    )
+''')
+conn.commit()
 
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    c.execute('''
-        INSERT INTO nmap_scans (timestamp, target, command, xml_path)
-        VALUES (?, ?, ?, ?)
-    ''', (timestamp, target, command, xml_path))
-    conn.commit()
-    conn.close()
+timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+c.execute('''
+    INSERT INTO nmap_scans (timestamp, target, command, xml_path)
+    VALUES (?, ?, ?, ?)
+''', (timestamp, target, command, xml_path))
+conn.commit()
+conn.close()
 
 def run_nmap_scan(target, script_category=None, db_path="smb_enum.db", host_data=None):
-    """
-    Run an nmap scan on one target, with optional script categories.
-    Save XML output, insert record into DB.
-    Now updates host_data dictionary with findings.
-    """
-    if host_data is None:
-        host_data = {
-            "vulnerabilities": [],
-            "open_ports": [],
-            "plaintext_creds": 0, 
-            "missing_patches": 0,
-            "host": target
-        }
+"""
+Run an nmap scan on one target, with optional script categories.
+Save XML output, insert record into DB.
+Now updates host_data dictionary with findings.
+"""
+if host_data is None:
+    host_data = {
+        "vulnerabilities": [],
+        "open_ports": [],
+        "plaintext_creds": 0, 
+        "missing_patches": 0,
+        "host": target
+    }
+
+timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+xml_filename = f"nmap_results_{timestamp_str}_{target.replace('/', '_')}.xml"
+cmd = ["nmap", "-sV", "-p", "21,22,23,25,53,80,139,445,1433,3306,3389,5900,8080,8443", "-oX", xml_filename]
+
+if script_category:
+    cmd += ["--script", script_category]
+cmd += [target]
+
+logger.info(f"[Nmap] Scanning {target} with script category: {script_category or 'None'}")
+logger.info(f"[Nmap] Command: {' '.join(cmd)}")
+
+try:
+    run_result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    logger.info(f"[Nmap Output for {target}]\n{run_result.stdout}")
     
-    timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    xml_filename = f"nmap_results_{timestamp_str}_{target.replace('/', '_')}.xml"
-    cmd = ["nmap", "-sV", "-p", "21,22,23,25,53,80,139,445,1433,3306,3389,5900,8080,8443", "-oX", xml_filename]
-
-    if script_category:
-        cmd += ["--script", script_category]
-    cmd += [target]
-
-    logger.info(f"[Nmap] Scanning {target} with script category: {script_category or 'None'}")
-    logger.info(f"[Nmap] Command: {' '.join(cmd)}")
-
+    # Parse XML output to get open ports and vulnerabilities
     try:
-        run_result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        logger.info(f"[Nmap Output for {target}]\n{run_result.stdout}")
+        tree = ET.parse(xml_filename)
+        root = tree.getroot()
         
-        # Parse XML output to get open ports and vulnerabilities
-        try:
-            tree = ET.parse(xml_filename)
-            root = tree.getroot()
+        # Get open ports
+        for port in root.findall(".//port[@state='open']"):
+            port_num = int(port.get('portid'))
+            host_data["open_ports"].append(port_num)
             
-            # Get open ports
-            for port in root.findall(".//port[@state='open']"):
-                port_num = int(port.get('portid'))
-                host_data["open_ports"].append(port_num)
+            # Check for services with default credentials
+            service = port.find("service")
+            if service is not None:
+                service_name = service.get('name', '')
                 
-                # Check for services with default credentials
-                service = port.find("service")
-                if service is not None:
-                    service_name = service.get('name', '')
-                    
-                    # Check for potentially vulnerable services
-                    if service_name == "ms-sql-s":
-                        host_data["vulnerabilities"].append("MS SQL Server Exposed")
-                    elif service_name == "mysql":
-                        host_data["vulnerabilities"].append("MySQL Exposed")
-                    elif service_name == "telnet":
-                        host_data["vulnerabilities"].append("Telnet (Cleartext) Exposed")
-                    elif service_name == "ftp":
-                        host_data["vulnerabilities"].append("FTP Service Exposed")
-            
-            # Get script results for vulnerabilities
-            for script in root.findall(".//script"):
-                script_id = script.get('id', '')
-                script_output = script.get('output', '')
-                
-                # Check for vulnerability scripts
-                if script_id.startswith("vuln-") or "vuln" in script_id:
-                    if "VULNERABLE" in script_output:
-                        vuln_name = script_id.replace("vuln-", "").upper()
-                        host_data["vulnerabilities"].append(vuln_name)
-                        logger.warning(f"[!] Vulnerability found: {vuln_name}")
-                
-                # Check for default credentials
-                if "default credential" in script_output.lower() or "default password" in script_output.lower():
-                    host_data["plaintext_creds"] += 1
-                    host_data["vulnerabilities"].append("Default Credentials")
-                    
-        except Exception as e:
-            logger.warning(f"Error parsing Nmap XML output: {e}")
+                # Check for potentially vulnerable services
+                if service_name == "ms-sql-s":
+                    host_data["vulnerabilities"].append("MS SQL Server Exposed")
+                elif service_name == "mysql":
+                    host_data["vulnerabilities"].append("MySQL Exposed")
+                elif service_name == "telnet":
+                    host_data["vulnerabilities"].append("Telnet (Cleartext) Exposed")
+                elif service_name == "ftp":
+                    host_data["vulnerabilities"].append("FTP Service Exposed")
         
-    except subprocess.CalledProcessError as e:
-        logger.warning(f"Nmap scan failed for {target}: {e}\n{e.output}")
-
-    # Log to DB
-    full_cmd_str = " ".join(cmd)
-    log_nmap_scan_to_db(db_path, target, full_cmd_str, os.path.abspath(xml_filename))
+        # Get script results for vulnerabilities
+        for script in root.findall(".//script"):
+            script_id = script.get('id', '')
+            script_output = script.get('output', '')
+            
+            # Check for vulnerability scripts
+            if script_id.startswith("vuln-") or "vuln" in script_id:
+                if "VULNERABLE" in script_output:
+                    vuln_name = script_id.replace("vuln-", "").upper()
+                    host_data["vulnerabilities"].append(vuln_name)
+                    logger.warning(f"[!] Vulnerability found: {vuln_name}")
+            
+            # Check for default credentials
+            if "default credential" in script_output.lower() or "default password" in script_output.lower():
+                host_data["plaintext_creds"] += 1
+                host_data["vulnerabilities"].append("Default Credentials")
+                
+    except Exception as e:
+        logger.warning(f"Error parsing Nmap XML output: {e}")
     
-    return host_data
+except subprocess.CalledProcessError as e:
+    logger.warning(f"Nmap scan failed for {target}: {e}\n{e.output}")
+
+# Log to DB
+full_cmd_str = " ".join(cmd)
+log_nmap_scan_to_db(db_path, target, full_cmd_str, os.path.abspath(xml_filename))
+
+return host_data
 
 def advanced_nmap_menu(db_path="smb_enum.db", host_data=None):
-    """
-    Allows user to specify multiple targets for parallel scanning,
-    choose an NSE script category, and run them concurrently.
-    Now updates host_data dictionary with findings.
-    """
-    if host_data is None:
-        host_data = {}
-        
-    logger.info("\n=== ADVANCED NMAP PARALLEL SCANS ===")
-    targets_input = input("Enter targets (comma-separated, e.g. '192.168.1.10,192.168.1.20/24'): ").strip()
-    if not targets_input:
-        logger.warning("No targets provided. Returning.")
-        return host_data
-
-    targets = [t.strip() for t in targets_input.split(",") if t.strip()]
-
-    logger.info("Common NSE categories: 'discovery', 'safe', 'default', 'vuln'")
-    script_category = input("Enter an NSE script category or leave blank for none: ").strip()
-
-    max_workers = 5
-    logger.info(f"Starting parallel Nmap scans on {len(targets)} target(s) with up to {max_workers} workers...")
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {}
-        for target in targets:
-            if target not in host_data:
-                host_data[target] = {
-                    "vulnerabilities": [],
-                    "open_ports": [],
-                    "plaintext_creds": 0,
-                    "missing_patches": 0,
-                    "host": target
-                }
-            future = executor.submit(run_nmap_scan, target, script_category, db_path, host_data[target])
-            futures[future] = target
-
-        for future in concurrent.futures.as_completed(futures):
-            target = futures[future]
-            try:
-                target_data = future.result()
-                host_data[target] = target_data
-            except Exception as e:
-                logger.error(f"Error in Nmap scan for {target}: {e}")
+"""
+Allows user to specify multiple targets for parallel scanning,
+choose an NSE script category, and run them concurrently.
+Now updates host_data dictionary with findings.
+"""
+if host_data is None:
+    host_data = {}
     
-    logger.info("Parallel Nmap scans completed.")
+logger.info("\n=== ADVANCED NMAP PARALLEL SCANS ===")
+targets_input = input("Enter targets (comma-separated, e.g. '192.168.1.10,192.168.1.20/24'): ").strip()
+if not targets_input:
+    logger.warning("No targets provided. Returning.")
     return host_data
 
+targets = [t.strip() for t in targets_input.split(",") if t.strip()]
 
-# ================== 6) METASPLOIT INTEGRATION ==================
+logger.info("Common NSE categories: 'discovery', 'safe', 'default', 'vuln'")
+script_category = input("Enter an NSE script category or leave blank for none: ").strip()
 
-def log_metasploit_run_to_db(db_path, target, module_name, output):
-    """
-    Insert a row for Metasploit runs into the metasploit_runs table.
-    """
-    conn = sqlite3.connect(db_path)
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS metasploit_runs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            target TEXT,
-            module TEXT,
-            output TEXT
-        )
-    ''')
-    conn.commit()
+max_workers = 5
+logger.info(f"Starting parallel Nmap scans on {len(targets)} target(s) with up to {max_workers} workers...")
 
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    c.execute('''
-        INSERT INTO metasploit_runs (timestamp, target, module, output)
-        VALUES (?, ?, ?, ?)
-    ''', (timestamp, target, module_name, output))
-    conn.commit()
-    conn.close()
-
-def run_metasploit_module(target, module_name, options=None, db_path="smb_enum.db", host_data=None):
-    """
-    Launch msfconsole non-interactively with a specific module, set RHOSTS, run, exit.
-    Now updates host_data dictionary with findings.
-    """
-    if host_data is None:
-        host_data = {
-            "vulnerabilities": [],
-            "open_ports": [],
-            "plaintext_creds": 0,
-            "missing_patches": 0,
-            "host": target
-        }
-        
-    if options is None:
-        options = {}
-
-    commands = [f"use {module_name}", f"set RHOSTS {target}"]
-    for k, v in options.items():
-        commands.append(f"set {k} {v}")
-    commands.append("run")
-    commands.append("exit")
-
-    msf_command_str = "; ".join(commands)
-    logger.info(f"[Metasploit] Running: {msf_command_str}")
-
-    try:
-        run_result = subprocess.run(
-            ["msfconsole", "-q", "-x", msf_command_str],
-            capture_output=True, text=True, check=True
-        )
-        output = run_result.stdout
-        logger.info(f"[Metasploit Output for {target}, module={module_name}]\n{output}")
-        
-        # Check output for vulnerability indicators
-        if module_name == "auxiliary/scanner/smb/smb_ms17_010":
-            if "MS17-010" in output and "VULNERABLE" in output:
-                host_data["vulnerabilities"].append("MS17-010 (EternalBlue)")
-                logger.warning(f"[!] {target} is VULNERABLE to MS17-010 (EternalBlue)!")
-        
-        elif module_name == "auxiliary/scanner/smb/smb_version":
-            # Extract SMB version info
-            if "SMBv1" in output:
-                host_data["vulnerabilities"].append("SMBv1 Enabled")
-            
-            # Look for EOL OS versions
-            for eol_os in ["Windows XP", "Windows 2003", "Windows 2000"]:
-                if eol_os in output:
-                    host_data["vulnerabilities"].append(f"EOL OS: {eol_os}")
-                    host_data["missing_patches"] += 5
-        
-        elif module_name == "auxiliary/scanner/ftp/anonymous":
-            if "Anonymous READ" in output:
-                host_data["vulnerabilities"].append("Anonymous FTP Access")
-                host_data["plaintext_creds"] += 1
-                logger.warning(f"[!] {target} allows anonymous FTP access!")
-                
-        # Add more module-specific checks here as needed
-        
-    except subprocess.CalledProcessError as e:
-        output = f"Metasploit run failed: {e}\n{e.output}"
-        logger.warning(output)
-
-    # Log result
-    log_metasploit_run_to_db(db_path, target, module_name, output)
-    
-    return host_data
-
-def metasploit_menu(db_path="smb_enum.db", host_data=None):
-    """
-    Enhanced Metasploit menu with more modules and host_data tracking.
-    """
-    if host_data is None:
-        host_data = {}
-        
-    while True:
-        logger.info("\n=== METASPLOIT MENU ===")
-        logger.info("1) SMB Version (auxiliary/scanner/smb/smb_version)")
-        logger.info("2) MS17-010 (auxiliary/scanner/smb/smb_ms17_010)")
-        logger.info("3) FTP Anonymous (auxiliary/scanner/ftp/anonymous)")
-        logger.info("4) SMB Login (auxiliary/scanner/smb/smb_login)")
-        logger.info("5) SSH Login (auxiliary/scanner/ssh/ssh_login)")
-        logger.info("6) MySQL Login (auxiliary/scanner/mysql/mysql_login)")
-        logger.info("7) Web Vulnerabilities (auxiliary/scanner/http/dir_scanner)")
-        logger.info("0) Return to main menu")
-
-        choice = input("Select a Metasploit module (0 to exit): ").strip()
-        if choice == '0':
-            break
-
-        target = input("Enter target IP or range (RHOSTS): ").strip()
-        if not target:
-            logger.warning("No target specified.")
-            continue
-            
-        # Initialize host_data for this target if it doesn't exist
+with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+    futures = {}
+    for target in targets:
         if target not in host_data:
             host_data[target] = {
                 "vulnerabilities": [],
@@ -3657,414 +3511,560 @@ def metasploit_menu(db_path="smb_enum.db", host_data=None):
                 "missing_patches": 0,
                 "host": target
             }
+        future = executor.submit(run_nmap_scan, target, script_category, db_path, host_data[target])
+        futures[future] = target
 
-        if choice == '1':
-            run_metasploit_module(target, "auxiliary/scanner/smb/smb_version", db_path=db_path, host_data=host_data[target])
-        elif choice == '2':
-            run_metasploit_module(target, "auxiliary/scanner/smb/smb_ms17_010", db_path=db_path, host_data=host_data[target])
-        elif choice == '3':
-            run_metasploit_module(target, "auxiliary/scanner/ftp/anonymous", db_path=db_path, host_data=host_data[target])
-        elif choice == '4':
-            username = input("Enter username (or 'file:/path/to/userlist'): ")
-            password = input("Enter password (or 'file:/path/to/passlist'): ")
-            options = {"SMBUser": username, "SMBPass": password}
-            run_metasploit_module(target, "auxiliary/scanner/smb/smb_login", options, db_path, host_data[target])
-        elif choice == '5':
-            username = input("Enter username (or 'file:/path/to/userlist'): ")
-            password = input("Enter password (or 'file:/path/to/passlist'): ")
-            options = {"USERNAME": username, "PASSWORD": password}
-            run_metasploit_module(target, "auxiliary/scanner/ssh/ssh_login", options, db_path, host_data[target])
-        elif choice == '6':
-            username = input("Enter username (or 'file:/path/to/userlist'): ")
-            password = input("Enter password (or 'file:/path/to/passlist'): ")
-            options = {"USERNAME": username, "PASSWORD": password}
-            run_metasploit_module(target, "auxiliary/scanner/mysql/mysql_login", options, db_path, host_data[target])
-        elif choice == '7':
-            run_metasploit_module(target, "auxiliary/scanner/http/dir_scanner", db_path=db_path, host_data=host_data[target])
-        else:
-            logger.info("Invalid choice. Please pick 0-7.")
+    for future in concurrent.futures.as_completed(futures):
+        target = futures[future]
+        try:
+            target_data = future.result()
+            host_data[target] = target_data
+        except Exception as e:
+            logger.error(f"Error in Nmap scan for {target}: {e}")
+
+logger.info("Parallel Nmap scans completed.")
+return host_data
+
+
+# ================== 6) METASPLOIT INTEGRATION ==================
+
+def log_metasploit_run_to_db(db_path, target, module_name, output):
+"""
+Insert a row for Metasploit runs into the metasploit_runs table.
+"""
+conn = sqlite3.connect(db_path)
+c = conn.cursor()
+c.execute('''
+    CREATE TABLE IF NOT EXISTS metasploit_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT,
+        target TEXT,
+        module TEXT,
+        output TEXT
+    )
+''')
+conn.commit()
+
+timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+c.execute('''
+    INSERT INTO metasploit_runs (timestamp, target, module, output)
+    VALUES (?, ?, ?, ?)
+''', (timestamp, target, module_name, output))
+conn.commit()
+conn.close()
+
+def run_metasploit_module(target, module_name, options=None, db_path="smb_enum.db", host_data=None):
+"""
+Launch msfconsole non-interactively with a specific module, set RHOSTS, run, exit.
+Now updates host_data dictionary with findings.
+"""
+if host_data is None:
+    host_data = {
+        "vulnerabilities": [],
+        "open_ports": [],
+        "plaintext_creds": 0,
+        "missing_patches": 0,
+        "host": target
+    }
     
-    return host_data
+if options is None:
+    options = {}
+
+commands = [f"use {module_name}", f"set RHOSTS {target}"]
+for k, v in options.items():
+    commands.append(f"set {k} {v}")
+commands.append("run")
+commands.append("exit")
+
+msf_command_str = "; ".join(commands)
+logger.info(f"[Metasploit] Running: {msf_command_str}")
+
+try:
+    run_result = subprocess.run(
+        ["msfconsole", "-q", "-x", msf_command_str],
+        capture_output=True, text=True, check=True
+    )
+    output = run_result.stdout
+    logger.info(f"[Metasploit Output for {target}, module={module_name}]\n{output}")
+    
+    # Check output for vulnerability indicators
+    if module_name == "auxiliary/scanner/smb/smb_ms17_010":
+        if "MS17-010" in output and "VULNERABLE" in output:
+            host_data["vulnerabilities"].append("MS17-010 (EternalBlue)")
+            logger.warning(f"[!] {target} is VULNERABLE to MS17-010 (EternalBlue)!")
+    
+    elif module_name == "auxiliary/scanner/smb/smb_version":
+        # Extract SMB version info
+        if "SMBv1" in output:
+            host_data["vulnerabilities"].append("SMBv1 Enabled")
+        
+        # Look for EOL OS versions
+        for eol_os in ["Windows XP", "Windows 2003", "Windows 2000"]:
+            if eol_os in output:
+                host_data["vulnerabilities"].append(f"EOL OS: {eol_os}")
+                host_data["missing_patches"] += 5
+    
+    elif module_name == "auxiliary/scanner/ftp/anonymous":
+        if "Anonymous READ" in output:
+            host_data["vulnerabilities"].append("Anonymous FTP Access")
+            host_data["plaintext_creds"] += 1
+            logger.warning(f"[!] {target} allows anonymous FTP access!")
+            
+    # Add more module-specific checks here as needed
+    
+except subprocess.CalledProcessError as e:
+    output = f"Metasploit run failed: {e}\n{e.output}"
+    logger.warning(output)
+
+# Log result
+log_metasploit_run_to_db(db_path, target, module_name, output)
+
+return host_data
+
+def metasploit_menu(db_path="smb_enum.db", host_data=None):
+"""
+Enhanced Metasploit menu with more modules and host_data tracking.
+"""
+if host_data is None:
+    host_data = {}
+    
+while True:
+    logger.info("\n=== METASPLOIT MENU ===")
+    logger.info("1) SMB Version (auxiliary/scanner/smb/smb_version)")
+    logger.info("2) MS17-010 (auxiliary/scanner/smb/smb_ms17_010)")
+    logger.info("3) FTP Anonymous (auxiliary/scanner/ftp/anonymous)")
+    logger.info("4) SMB Login (auxiliary/scanner/smb/smb_login)")
+    logger.info("5) SSH Login (auxiliary/scanner/ssh/ssh_login)")
+    logger.info("6) MySQL Login (auxiliary/scanner/mysql/mysql_login)")
+    logger.info("7) Web Vulnerabilities (auxiliary/scanner/http/dir_scanner)")
+    logger.info("0) Return to main menu")
+
+    choice = input("Select a Metasploit module (0 to exit): ").strip()
+    if choice == '0':
+        break
+
+    target = input("Enter target IP or range (RHOSTS): ").strip()
+    if not target:
+        logger.warning("No target specified.")
+        continue
+        
+    # Initialize host_data for this target if it doesn't exist
+    if target not in host_data:
+        host_data[target] = {
+            "vulnerabilities": [],
+            "open_ports": [],
+            "plaintext_creds": 0,
+            "missing_patches": 0,
+            "host": target
+        }
+
+    if choice == '1':
+        run_metasploit_module(target, "auxiliary/scanner/smb/smb_version", db_path=db_path, host_data=host_data[target])
+    elif choice == '2':
+        run_metasploit_module(target, "auxiliary/scanner/smb/smb_ms17_010", db_path=db_path, host_data=host_data[target])
+    elif choice == '3':
+        run_metasploit_module(target, "auxiliary/scanner/ftp/anonymous", db_path=db_path, host_data=host_data[target])
+    elif choice == '4':
+        username = input("Enter username (or 'file:/path/to/userlist'): ")
+        password = input("Enter password (or 'file:/path/to/passlist'): ")
+        options = {"SMBUser": username, "SMBPass": password}
+        run_metasploit_module(target, "auxiliary/scanner/smb/smb_login", options, db_path, host_data[target])
+    elif choice == '5':
+        username = input("Enter username (or 'file:/path/to/userlist'): ")
+        password = input("Enter password (or 'file:/path/to/passlist'): ")
+        options = {"USERNAME": username, "PASSWORD": password}
+        run_metasploit_module(target, "auxiliary/scanner/ssh/ssh_login", options, db_path, host_data[target])
+    elif choice == '6':
+        username = input("Enter username (or 'file:/path/to/userlist'): ")
+        password = input("Enter password (or 'file:/path/to/passlist'): ")
+        options = {"USERNAME": username, "PASSWORD": password}
+        run_metasploit_module(target, "auxiliary/scanner/mysql/mysql_login", options, db_path, host_data[target])
+    elif choice == '7':
+        run_metasploit_module(target, "auxiliary/scanner/http/dir_scanner", db_path=db_path, host_data=host_data[target])
+    else:
+        logger.info("Invalid choice. Please pick 0-7.")
+
+return host_data
 
 
 # ================== 7) VULNERABILITY SCORING ==================
 
 def setup_vulnerability_scores_table(db_path: str):
-    """
-    Create or ensure existence of a 'vulnerability_scores' table.
-    """
-    conn = sqlite3.connect(db_path)
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS vulnerability_scores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            host TEXT,
-            open_ports INT,
-            vulnerabilities INT,
-            high_risk_ports INT,
-            plaintext_creds INT,
-            missing_patches INT,
-            cvss_score REAL,
-            critical_vulns INT,
-            final_score INT,
-            risk_category TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
+"""
+Create or ensure existence of a 'vulnerability_scores' table.
+"""
+conn = sqlite3.connect(db_path)
+c = conn.cursor()
+c.execute('''
+    CREATE TABLE IF NOT EXISTS vulnerability_scores (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT,
+        host TEXT,
+        open_ports INT,
+        vulnerabilities INT,
+        high_risk_ports INT,
+        plaintext_creds INT,
+        missing_patches INT,
+        cvss_score REAL,
+        critical_vulns INT,
+        final_score INT,
+        risk_category TEXT
+    )
+''')
+conn.commit()
+conn.close()
 
 def enhance_vulnerability_scoring(host_data):
-    """
-    Enhancement: Add CVE lookup and scoring based on CVSS.
-    """
-    vulnerabilities = host_data.get("vulnerabilities", [])
-    total_cvss_score = 0
-    critical_vulns = 0
-    
-    # Define known vulnerabilities with CVSS scores
-    vuln_cvss_map = {
-        "MS17-010": 9.8,  # EternalBlue
-        "SMBv1 Enabled": 7.5,
-        "EOL OS": 8.0,
-        "Anonymous FTP Access": 5.0,
-        "Default Credentials": 7.0,
-        "SMB Signing Disabled": 5.8,
-        "Writable Share": 6.0,
-    }
-    
-    for vuln in vulnerabilities:
-        # Check if we have a predefined CVSS score
-        base_vuln_name = next((k for k in vuln_cvss_map.keys() if k in vuln), None)
-        if base_vuln_name:
-            cvss_score = vuln_cvss_map[base_vuln_name]
-            total_cvss_score += cvss_score
-            
-            if cvss_score >= 9.0:
-                critical_vulns += 1
-            
-            logger.info(f"CVSS score for {vuln}: {cvss_score}")
-        else:
-            # For unknown vulnerabilities, try to look up CVE if present
-            cve_match = re.search(r'(CVE-\d{4}-\d{4,7})', vuln)
-            if cve_match:
-                cve_id = cve_match.group(1)
-                try:
-                    logger.info(f"Looking up CVSS score for {cve_id}")
-                    response = requests.get(f"https://services.nvd.nist.gov/rest/json/cve/1.0/{cve_id}", timeout=5)
-                    if response.status_code == 200:
-                        data = response.json()
-                        if 'result' in data and 'CVE_Items' in data['result'] and len(data['result']['CVE_Items']) > 0:
-                            if 'impact' in data['result']['CVE_Items'][0] and 'baseMetricV3' in data['result']['CVE_Items'][0]['impact']:
-                                cvss_score = data['result']['CVE_Items'][0]['impact']['baseMetricV3']['cvssV3']['baseScore']
-                                total_cvss_score += float(cvss_score)
+"""
+Enhancement: Add CVE lookup and scoring based on CVSS.
+"""
+vulnerabilities = host_data.get("vulnerabilities", [])
+total_cvss_score = 0
+critical_vulns = 0
+
+# Define known vulnerabilities with CVSS scores
+vuln_cvss_map = {
+    "MS17-010": 9.8,  # EternalBlue
+    "SMBv1 Enabled": 7.5,
+    "EOL OS": 8.0,
+    "Anonymous FTP Access": 5.0,
+    "Default Credentials": 7.0,
+    "SMB Signing Disabled": 5.8,
+    "Writable Share": 6.0,
+}
+
+for vuln in vulnerabilities:
+    # Check if we have a predefined CVSS score
+    base_vuln_name = next((k for k in vuln_cvss_map.keys() if k in vuln), None)
+    if base_vuln_name:
+        cvss_score = vuln_cvss_map[base_vuln_name]
+        total_cvss_score += cvss_score
+        
+        if cvss_score >= 9.0:
+            critical_vulns += 1
+        
+        logger.info(f"CVSS score for {vuln}: {cvss_score}")
+    else:
+        # For unknown vulnerabilities, try to look up CVE if present
+        cve_match = re.search(r'(CVE-\d{4}-\d{4,7})', vuln)
+        if cve_match:
+            cve_id = cve_match.group(1)
+            try:
+                logger.info(f"Looking up CVSS score for {cve_id}")
+                response = requests.get(f"https://services.nvd.nist.gov/rest/json/cve/1.0/{cve_id}", timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    if 'result' in data and 'CVE_Items' in data['result'] and len(data['result']['CVE_Items']) > 0:
+                        if 'impact' in data['result']['CVE_Items'][0] and 'baseMetricV3' in data['result']['CVE_Items'][0]['impact']:
+                            cvss_score = data['result']['CVE_Items'][0]['impact']['baseMetricV3']['cvssV3']['baseScore']
+                            total_cvss_score += float(cvss_score)
+                            
+                            if float(cvss_score) >= 9.0:
+                                critical_vulns += 1
                                 
-                                if float(cvss_score) >= 9.0:
-                                    critical_vulns += 1
-                                    
-                                logger.info(f"CVSS score for {cve_id}: {cvss_score}")
-                            else:
-                                # Fallback to baseMetricV2 if V3 not available
-                                if 'baseMetricV2' in data['result']['CVE_Items'][0]['impact']:
-                                    cvss_score = data['result']['CVE_Items'][0]['impact']['baseMetricV2']['cvssV2']['baseScore']
-                                    total_cvss_score += float(cvss_score)
-                                    logger.info(f"CVSS V2 score for {cve_id}: {cvss_score}")
-                                else:
-                                    logger.warning(f"No CVSS score found for {cve_id}")
-                                    total_cvss_score += 5  # Default medium score
+                            logger.info(f"CVSS score for {cve_id}: {cvss_score}")
                         else:
-                            logger.warning(f"No CVE data found for {cve_id}")
-                            total_cvss_score += 5  # Default medium score
-                except Exception as e:
-                    logger.warning(f"Error looking up CVE {cve_id}: {e}")
-                    total_cvss_score += 5  # Default medium score
-            else:
-                # Generic vulnerability with no CVE ID
+                            # Fallback to baseMetricV2 if V3 not available
+                            if 'baseMetricV2' in data['result']['CVE_Items'][0]['impact']:
+                                cvss_score = data['result']['CVE_Items'][0]['impact']['baseMetricV2']['cvssV2']['baseScore']
+                                total_cvss_score += float(cvss_score)
+                                logger.info(f"CVSS V2 score for {cve_id}: {cvss_score}")
+                            else:
+                                logger.warning(f"No CVSS score found for {cve_id}")
+                                total_cvss_score += 5  # Default medium score
+                    else:
+                        logger.warning(f"No CVE data found for {cve_id}")
+                        total_cvss_score += 5  # Default medium score
+            except Exception as e:
+                logger.warning(f"Error looking up CVE {cve_id}: {e}")
                 total_cvss_score += 5  # Default medium score
-    
-    # Update host_data with CVSS information
-    host_data['cvss_score'] = total_cvss_score
-    host_data['critical_vulns'] = critical_vulns
-    
-    return host_data
+        else:
+            # Generic vulnerability with no CVE ID
+            total_cvss_score += 5  # Default medium score
+
+# Update host_data with CVSS information
+host_data['cvss_score'] = total_cvss_score
+host_data['critical_vulns'] = critical_vulns
+
+return host_data
 
 def calculate_vulnerability_score(host_data: dict):
-    """
-    Enhanced scoring algorithm including CVSS scores and critical vulnerabilities.
-    
-    Scoring weights:
-      - Base score: 100 points
-      - Each vulnerability: -15 points
-      - Each open port: -5 points
-      - Each plaintext credential: -10 points
-      - Each missing patch: -5 points
-      - Each high-risk port: -3 additional points
-      - Critical vulnerabilities: -20 points each
-      - CVSS score adjustment: -1 point per CVSS point
-      
-    Returns:
-      (final_score, vuln_count, open_port_count, high_risk_count, plaintext_creds, 
-       missing_patches, cvss_score, critical_vulns, category)
-    """
-    score = 100
+"""
+Enhanced scoring algorithm including CVSS scores and critical vulnerabilities.
 
-    # Allow configuration of scoring weights
-    VULN_PENALTY = 15
-    PORT_PENALTY = 5
-    CREDS_PENALTY = 10
-    PATCH_PENALTY = 5
-    HIGH_RISK_PENALTY = 3
-    CRITICAL_VULN_PENALTY = 20
-    CVSS_PENALTY_FACTOR = 1
+Scoring weights:
+  - Base score: 100 points
+  - Each vulnerability: -15 points
+  - Each open port: -5 points
+  - Each plaintext credential: -10 points
+  - Each missing patch: -5 points
+  - Each high-risk port: -3 additional points
+  - Critical vulnerabilities: -20 points each
+  - CVSS score adjustment: -1 point per CVSS point
+  
+Returns:
+  (final_score, vuln_count, open_port_count, high_risk_count, plaintext_creds, 
+   missing_patches, cvss_score, critical_vulns, category)
+"""
+score = 100
 
-    vulnerabilities = host_data.get("vulnerabilities", [])
-    open_ports = host_data.get("open_ports", [])
-    plaintext_creds = host_data.get("plaintext_creds", 0)
-    missing_patches = host_data.get("missing_patches", 0)
-    cvss_score = host_data.get("cvss_score", 0)
-    critical_vulns = host_data.get("critical_vulns", 0)
+# Allow configuration of scoring weights
+VULN_PENALTY = 15
+PORT_PENALTY = 5
+CREDS_PENALTY = 10
+PATCH_PENALTY = 5
+HIGH_RISK_PENALTY = 3
+CRITICAL_VULN_PENALTY = 20
+CVSS_PENALTY_FACTOR = 1
 
-    vuln_count = len(vulnerabilities)
-    open_port_count = len(open_ports)
+vulnerabilities = host_data.get("vulnerabilities", [])
+open_ports = host_data.get("open_ports", [])
+plaintext_creds = host_data.get("plaintext_creds", 0)
+missing_patches = host_data.get("missing_patches", 0)
+cvss_score = host_data.get("cvss_score", 0)
+critical_vulns = host_data.get("critical_vulns", 0)
 
-    # Subtract for each vulnerability
-    score -= (vuln_count * VULN_PENALTY)
-    # Subtract for each open port
-    score -= (open_port_count * PORT_PENALTY)
-    # Subtract for discovered plaintext creds
-    score -= (plaintext_creds * CREDS_PENALTY)
-    # Subtract for missing patches
-    score -= (missing_patches * PATCH_PENALTY)
-    # Subtract for critical vulnerabilities (additional penalty)
-    score -= (critical_vulns * CRITICAL_VULN_PENALTY)
-    # Subtract based on CVSS score
-    score -= (cvss_score * CVSS_PENALTY_FACTOR)
+vuln_count = len(vulnerabilities)
+open_port_count = len(open_ports)
 
-    # Additional penalty for high-risk ports
-    high_risk_list = [21, 22, 23, 25, 53, 139, 445, 1433, 3306, 3389, 5900]
-    high_risk_count = sum(1 for p in open_ports if p in high_risk_list)
-    score -= (high_risk_count * HIGH_RISK_PENALTY)
+# Subtract for each vulnerability
+score -= (vuln_count * VULN_PENALTY)
+# Subtract for each open port
+score -= (open_port_count * PORT_PENALTY)
+# Subtract for discovered plaintext creds
+score -= (plaintext_creds * CREDS_PENALTY)
+# Subtract for missing patches
+score -= (missing_patches * PATCH_PENALTY)
+# Subtract for critical vulnerabilities (additional penalty)
+score -= (critical_vulns * CRITICAL_VULN_PENALTY)
+# Subtract based on CVSS score
+score -= (cvss_score * CVSS_PENALTY_FACTOR)
 
-    final_score = max(score, 0)
+# Additional penalty for high-risk ports
+high_risk_list = [21, 22, 23, 25, 53, 139, 445, 1433, 3306, 3389, 5900]
+high_risk_count = sum(1 for p in open_ports if p in high_risk_list)
+score -= (high_risk_count * HIGH_RISK_PENALTY)
 
-    # Risk category thresholds
-    LOW_THRESHOLD = 80
-    MEDIUM_THRESHOLD = 50
-    HIGH_THRESHOLD = 20
+final_score = max(score, 0)
 
-    # Risk category
-    if final_score >= LOW_THRESHOLD:
-        category = "Low"
-    elif final_score >= MEDIUM_THRESHOLD:
-        category = "Medium"
-    elif final_score >= HIGH_THRESHOLD:
-        category = "High"
-    else:
-        category = "Critical"
+# Risk category thresholds
+LOW_THRESHOLD = 80
+MEDIUM_THRESHOLD = 50
+HIGH_THRESHOLD = 20
 
-    return (final_score, vuln_count, open_port_count, high_risk_count, plaintext_creds, 
-            missing_patches, cvss_score, critical_vulns, category)
+# Risk category
+if final_score >= LOW_THRESHOLD:
+    category = "Low"
+elif final_score >= MEDIUM_THRESHOLD:
+    category = "Medium"
+elif final_score >= HIGH_THRESHOLD:
+    category = "High"
+else:
+    category = "Critical"
+
+return (final_score, vuln_count, open_port_count, high_risk_count, plaintext_creds, 
+        missing_patches, cvss_score, critical_vulns, category)
 
 def log_vulnerability_score(db_path: str,
-                            host: str,
-                            open_ports: int,
-                            vulnerabilities: int,
-                            high_risk_ports: int,
-                            plaintext_creds: int,
-                            missing_patches: int,
-                            cvss_score: float,
-                            critical_vulns: int,
-                            final_score: int,
-                            category: str):
-    """
-    Insert a row into vulnerability_scores table.
-    """
-    conn = sqlite3.connect(db_path)
-    c = conn.cursor()
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        host: str,
+                        open_ports: int,
+                        vulnerabilities: int,
+                        high_risk_ports: int,
+                        plaintext_creds: int,
+                        missing_patches: int,
+                        cvss_score: float,
+                        critical_vulns: int,
+                        final_score: int,
+                        category: str):
+"""
+Insert a row into vulnerability_scores table.
+"""
+conn = sqlite3.connect(db_path)
+c = conn.cursor()
+timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    c.execute('''
-        INSERT INTO vulnerability_scores (
-            timestamp, host, open_ports, vulnerabilities,
-            high_risk_ports, plaintext_creds, missing_patches,
-            cvss_score, critical_vulns, final_score, risk_category
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (timestamp, host, open_ports, vulnerabilities,
-          high_risk_ports, plaintext_creds, missing_patches,
-          cvss_score, critical_vulns, final_score, category))
-    conn.commit()
-    conn.close()
+c.execute('''
+    INSERT INTO vulnerability_scores (
+        timestamp, host, open_ports, vulnerabilities,
+        high_risk_ports, plaintext_creds, missing_patches,
+        cvss_score, critical_vulns, final_score, risk_category
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+''', (timestamp, host, open_ports, vulnerabilities,
+      high_risk_ports, plaintext_creds, missing_patches,
+      cvss_score, critical_vulns, final_score, category))
+conn.commit()
+conn.close()
 
 def add_remediation_recommendations(host_data: dict, db_path="smb_enum.db"):
-    """
-    Generate specific remediation steps based on findings.
-    """
-    if "host" not in host_data:
-        logger.warning("Host data missing 'host' field, cannot generate recommendations")
-        return []
-    
-    host = host_data["host"]
-    recommendations = []
-    
-    # Remediation mappings for common vulnerabilities
-    remediation_map = {
-        "SMBv1 Enabled": {
-            "severity": "HIGH",
-            "finding": "SMBv1 Protocol Enabled",
-            "remediation": "Disable SMBv1 protocol using Group Policy or registry settings.",
-            "reference": "https://support.microsoft.com/en-us/topic/how-to-enable-and-disable-smbv1-19be6424-5dd5-4797-8385-75488a9c54c5"
-        },
-        "MS17-010": {
-            "severity": "CRITICAL",
-            "finding": "MS17-010 (EternalBlue) Vulnerability",
-            "remediation": "Apply Microsoft security patch MS17-010 immediately.",
-            "reference": "https://docs.microsoft.com/en-us/security-updates/securitybulletins/2017/ms17-010"
-        },
-        "SMB Signing Disabled": {
-            "severity": "MEDIUM",
-            "finding": "SMB Signing Disabled",
-            "remediation": "Enable SMB signing via Group Policy.",
-            "reference": "https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/microsoft-network-client-digitally-sign-communications-always"
-        },
-        "Anonymous FTP Access": {
-            "severity": "HIGH",
-            "finding": "Anonymous FTP Access",
-            "remediation": "Disable anonymous FTP access or restrict permissions.",
-            "reference": "https://www.stigviewer.com/stig/ftp_server/2015-06-01/finding/V-1"
-        },
-        "Default Credentials": {
-            "severity": "CRITICAL",
-            "finding": "Default Credentials in Use",
-            "remediation": "Change all default passwords and implement a strong password policy.",
-            "reference": "https://www.cisa.gov/sites/default/files/publications/Eliminating_Obsolete_Connections.pdf"
-        },
-        "EOL OS": {
-            "severity": "CRITICAL",
-            "finding": "End-of-Life Operating System",
-            "remediation": "Upgrade to a supported operating system version immediately.",
-            "reference": "https://www.cisa.gov/sites/default/files/publications/Assess_Your_Cyber_Infrastructure.pdf"
-        },
-        "Writable Share": {
-            "severity": "HIGH",
-            "finding": "Insecure File Share Permissions",
-            "remediation": "Review and restrict share permissions to authorized users only.",
-            "reference": "https://docs.microsoft.com/en-us/windows-server/storage/file-server/configure-security-permissions-file-share"
-        }
+"""
+Generate specific remediation steps based on findings.
+"""
+if "host" not in host_data:
+    logger.warning("Host data missing 'host' field, cannot generate recommendations")
+    return []
+
+host = host_data["host"]
+recommendations = []
+
+# Remediation mappings for common vulnerabilities
+remediation_map = {
+    "SMBv1 Enabled": {
+        "severity": "HIGH",
+        "finding": "SMBv1 Protocol Enabled",
+        "remediation": "Disable SMBv1 protocol using Group Policy or registry settings.",
+        "reference": "https://support.microsoft.com/en-us/topic/how-to-enable-and-disable-smbv1-19be6424-5dd5-4797-8385-75488a9c54c5"
+    },
+    "MS17-010": {
+        "severity": "CRITICAL",
+        "finding": "MS17-010 (EternalBlue) Vulnerability",
+        "remediation": "Apply Microsoft security patch MS17-010 immediately.",
+        "reference": "https://docs.microsoft.com/en-us/security-updates/securitybulletins/2017/ms17-010"
+    },
+    "SMB Signing Disabled": {
+        "severity": "MEDIUM",
+        "finding": "SMB Signing Disabled",
+        "remediation": "Enable SMB signing via Group Policy.",
+        "reference": "https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/microsoft-network-client-digitally-sign-communications-always"
+    },
+    "Anonymous FTP Access": {
+        "severity": "HIGH",
+        "finding": "Anonymous FTP Access",
+        "remediation": "Disable anonymous FTP access or restrict permissions.",
+        "reference": "https://www.stigviewer.com/stig/ftp_server/2015-06-01/finding/V-1"
+    },
+    "Default Credentials": {
+        "severity": "CRITICAL",
+        "finding": "Default Credentials in Use",
+        "remediation": "Change all default passwords and implement a strong password policy.",
+        "reference": "https://www.cisa.gov/sites/default/files/publications/Eliminating_Obsolete_Connections.pdf"
+    },
+    "EOL OS": {
+        "severity": "CRITICAL",
+        "finding": "End-of-Life Operating System",
+        "remediation": "Upgrade to a supported operating system version immediately.",
+        "reference": "https://www.cisa.gov/sites/default/files/publications/Assess_Your_Cyber_Infrastructure.pdf"
+    },
+    "Writable Share": {
+        "severity": "HIGH",
+        "finding": "Insecure File Share Permissions",
+        "remediation": "Review and restrict share permissions to authorized users only.",
+        "reference": "https://docs.microsoft.com/en-us/windows-server/storage/file-server/configure-security-permissions-file-share"
     }
-    
-    # Check vulnerabilities against remediation map
-    for vuln in host_data.get("vulnerabilities", []):
-        for vuln_key, remedy in remediation_map.items():
-            if vuln_key in vuln:  # Partial match to catch variants
-                recommendations.append({
-                    "severity": remedy["severity"],
-                    "finding": remedy["finding"],
-                    "remediation": remedy["remediation"],
-                    "reference": remedy["reference"]
-                })
-                break
-    
-    # Check for high-risk ports
-    high_risk_ports = []
-    for port in host_data.get("open_ports", []):
-        if port in [21, 23, 139, 445, 3389]:
-            high_risk_ports.append(port)
-    
-    if high_risk_ports:
-        port_list = ", ".join(str(p) for p in high_risk_ports)
-        recommendations.append({
-            "severity": "MEDIUM",
-            "finding": f"High-risk ports exposed: {port_list}",
-            "remediation": "Filter or close unnecessary high-risk ports at the firewall.",
-            "reference": "https://www.cisa.gov/sites/default/files/publications/Securing_Network_Infrastructure_Devices.pdf"
-        })
-    
-    # Check if plaintext credentials were found
-    if host_data.get("plaintext_creds", 0) > 0:
-        recommendations.append({
-            "severity": "HIGH",
-            "finding": "Plaintext Credentials Discovered",
-            "remediation": "Implement secure authentication and encrypt all credential storage.",
-            "reference": "https://csrc.nist.gov/publications/detail/sp/800-63/3/final"
-        })
-    
-    # Check missing patches
-    if host_data.get("missing_patches", 0) > 0:
-        recommendations.append({
-            "severity": "HIGH",
-            "finding": "Missing Security Patches",
-            "remediation": "Implement a regular patching schedule and verify patch installation.",
-            "reference": "https://www.cisa.gov/sites/default/files/publications/Patch_Management.pdf"
-        })
-    
-    # Log recommendations to database
-    conn = sqlite3.connect(db_path)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS remediation_recommendations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                host TEXT,
-                timestamp TEXT,
-                severity TEXT,
-                finding TEXT,
-                remediation TEXT,
-                reference TEXT)''')
-    
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    for rec in recommendations:
-        c.execute('''INSERT INTO remediation_recommendations 
-                    (host, timestamp, severity, finding, remediation, reference) 
-                    VALUES (?, ?, ?, ?, ?, ?)''',
-                 (host, timestamp, 
-                  rec['severity'], rec['finding'], 
-                  rec['remediation'], rec['reference']))
-    
-    conn.commit()
-    conn.close()
-    
-    logger.info(f"Generated {len(recommendations)} remediation recommendations for {host}")
-    return recommendations
+}
+
+# Check vulnerabilities against remediation map
+for vuln in host_data.get("vulnerabilities", []):
+    for vuln_key, remedy in remediation_map.items():
+        if vuln_key in vuln:  # Partial match to catch variants
+            recommendations.append({
+                "severity": remedy["severity"],
+                "finding": remedy["finding"],
+                "remediation": remedy["remediation"],
+                "reference": remedy["reference"]
+            })
+            break
+
+# Check for high-risk ports
+high_risk_ports = []
+for port in host_data.get("open_ports", []):
+    if port in [21, 23, 139, 445, 3389]:
+        high_risk_ports.append(port)
+
+if high_risk_ports:
+    port_list = ", ".join(str(p) for p in high_risk_ports)
+    recommendations.append({
+        "severity": "MEDIUM",
+        "finding": f"High-risk ports exposed: {port_list}",
+        "remediation": "Filter or close unnecessary high-risk ports at the firewall.",
+        "reference": "https://www.cisa.gov/sites/default/files/publications/Securing_Network_Infrastructure_Devices.pdf"
+    })
+
+# Check if plaintext credentials were found
+if host_data.get("plaintext_creds", 0) > 0:
+    recommendations.append({
+        "severity": "HIGH",
+        "finding": "Plaintext Credentials Discovered",
+        "remediation": "Implement secure authentication and encrypt all credential storage.",
+        "reference": "https://csrc.nist.gov/publications/detail/sp/800-63/3/final"
+    })
+
+# Check missing patches
+if host_data.get("missing_patches", 0) > 0:
+    recommendations.append({
+        "severity": "HIGH",
+        "finding": "Missing Security Patches",
+        "remediation": "Implement a regular patching schedule and verify patch installation.",
+        "reference": "https://www.cisa.gov/sites/default/files/publications/Patch_Management.pdf"
+    })
+
+# Log recommendations to database
+conn = sqlite3.connect(db_path)
+c = conn.cursor()
+c.execute('''CREATE TABLE IF NOT EXISTS remediation_recommendations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            host TEXT,
+            timestamp TEXT,
+            severity TEXT,
+            finding TEXT,
+            remediation TEXT,
+            reference TEXT)''')
+
+timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+for rec in recommendations:
+    c.execute('''INSERT INTO remediation_recommendations 
+                (host, timestamp, severity, finding, remediation, reference) 
+                VALUES (?, ?, ?, ?, ?, ?)''',
+             (host, timestamp, 
+              rec['severity'], rec['finding'], 
+              rec['remediation'], rec['reference']))
+
+conn.commit()
+conn.close()
+
+logger.info(f"Generated {len(recommendations)} remediation recommendations for {host}")
+return recommendations
 
 def run_vulnerability_scoring_workflow(db_path: str, discovered_data: dict):
-    """
-    Enhanced vulnerability scoring workflow with remediation guidance.
-    """
-    setup_vulnerability_scores_table(db_path)
+"""
+Enhanced vulnerability scoring workflow with remediation guidance.
+"""
+setup_vulnerability_scores_table(db_path)
 
-    host_scores = {}
-    remediation_results = {}
+host_scores = {}
+remediation_results = {}
 
-    for host, data in discovered_data.items():
-        # Enhance scoring with CVSS data
-        data = enhance_vulnerability_scoring(data)
-        
-        # Calculate score
-        (final_score, vuln_count, open_count, high_risk_count,
-         plain_creds, missing_patches, cvss_score, critical_vulns, category) = calculate_vulnerability_score(data)
-
-        logger.info(f"[Score] {host}: final_score={final_score}, category={category}, CVSS={cvss_score}")
-        
-        # Generate remediation recommendations
-        remediation_results[host] = add_remediation_recommendations(data, db_path)
-        
-        # Insert into DB
-        log_vulnerability_score(db_path,
-                                host,
-                                open_count,
-                                vuln_count,
-                                high_risk_count,
-                                plain_creds,
-                                missing_patches,
-                                cvss_score,
-                                critical_vulns,
-                                final_score,
-                                category)
-        host_scores[host] = final_score
-
-    # Create line plot of final scores
-    create_line_plot_of_scores(host_scores)
+for host, data in discovered_data.items():
+    # Enhance scoring with CVSS data
+    data = enhance_vulnerability_scoring(data)
     
-    # Generate comprehensive report
-    generate_reports(db_path, host_scores, remediation_results)
+    # Calculate score
+    (final_score, vuln_count, open_count, high_risk_count,
+     plain_creds, missing_patches, cvss_score, critical_vulns, category) = calculate_vulnerability_score(data)
+
+    logger.info(f"[Score] {host}: final_score={final_score}, category={category}, CVSS={cvss_score}")
     
-    return host_scores, remediation_results
+    # Generate remediation recommendations
+    remediation_results[host] = add_remediation_recommendations(data, db_path)
+    
+    # Insert into DB
+    log_vulnerability_score(db_path,
+                            host,
+                            open_count,
+                            vuln_count,
+                            high_risk_count,
+                            plain_creds,
+                            missing_patches,
+                            cvss_score,
+                            critical_vulns,
+                            final_score,
+                            category)
+    host_scores[host] = final_score
+
+# Create line plot of final scores
+create_line_plot_of_scores(host_scores)
+
+# Generate comprehensive report
+generate_reports(db_path, host_scores, remediation_results)
+
+return host_scores, remediation_results
