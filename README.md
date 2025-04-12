@@ -1,6 +1,3 @@
-Sure! Below is a reverbose README.md template designed for a project similar to the one found in the SMB-Scor3 repository. This README.md includes sections for an introduction, features, installation, usage, data flow, and visualizations such as charts and graphs. You can modify it as needed based on the specifics of your project.
-
-```markdown
 # Vulnerability Scoring Tool
 
 ## Introduction
@@ -19,6 +16,7 @@ This README outlines the features, installation steps, usage instructions, and a
 
 ## Installation
 
+```markdown
 To set up the Vulnerability Scoring Tool, follow the steps below:
 
 1. **Clone the Repository**:
@@ -106,11 +104,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Special thanks to the open-source community for their valuable contributions and support.
 
 ---
-
-For any questions or further information, feel free to open an issue on the repository or contact the maintainer at [your_email@example.com].
-```
-
-### Notes:
-- Be sure to replace placeholder links, paths to images, and your username/email with actual values corresponding to your project.
-- Review the content carefully to ensure it accurately reflects the specifics of your `vuln_score.py` program. 
-- For the charts and graphs, you can generate them using libraries like Matplotlib or Seaborn, and then save the output images in your project directory.
+]
