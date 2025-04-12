@@ -144,6 +144,7 @@ For any questions or inquiries, please feel free to reach out:
 - Replace `path_to_severity_distribution_chart.png`, `path_to_total_vulnerabilities_chart.png`, and `path_to_trends_over_time_chart.png` with the actual paths to your images or charts when you generate them.
 - Update your email and GitHub profile placeholder text with your actual contact information.
 - Feel free to customize any sections further to better match your tool's features and purpose!
+```
 
 <p align="center">
 ⚠️ Disclaimer
