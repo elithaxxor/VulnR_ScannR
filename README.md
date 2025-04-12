@@ -118,24 +118,7 @@ Contributions to VulnR_ScannR are highly encouraged! If you would like to enhanc
 
 ## 📝 License
 
-This project is open-source and available under the MIT License. See the [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- **Inspiration**: Special thanks to the open-source community for their continuous support and contributions.
-- **Learning Resources**: Acknowledging various vulnerability assessment methodologies that informed this project.
-
----
-
-## 📧 Contact
-
-For any questions or inquiries, please feel free to reach out:
-
-- **Email**: [your_email@example.com](mailto:your_email@example.com)
-- **GitHub**: [YourGitHubProfile](https://github.com/YourGitHubProfile)
-
+@copyleft - see "Disclaimer" below.
 ---
 
 ```
