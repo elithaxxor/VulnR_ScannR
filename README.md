@@ -129,6 +129,81 @@ Contributions to VulnR_ScannR are highly encouraged! If you would like to enhanc
 - Feel free to customize any sections further to better match your tool's features and purpose!
 ```
 
+### CHANGELOG 
+
+
+# 📜 CHANGELOG
+
+## 🚀 New Features in This Release
+
+We are excited to announce a host of new features that enhance our tool's capabilities! Below are the details of the newly implemented functionalities, categorized for clarity.
+
+### 🌐 Multi-Protocol Support
+
+Our tool now supports scanning across several protocols, ensuring a comprehensive approach to security assessments:
+
+- **🗂️ FTP (Ports 21)**:
+  - Scanning for vulnerabilities and testing for **anonymous access**.
+  
+- **🔒 SSH (Port 22)**:
+  - Conducting thorough **security assessments** to identify potential weaknesses.
+
+- **📞 Telnet (Port 23)**:
+  - Detection of active **Telnet services**, allowing for better security oversight.
+
+- **✉️ SMTP (Port 25)**:
+  - Enumeration capabilities to help identify and evaluate **email services** and their configurations.
+
+- **🌐 DNS (Port 53)**:
+  - Comprehensive **DNS analysis** for identifying misconfigurations and vulnerabilities.
+
+- **🌍 HTTP/HTTPS (Ports 80/443)**:
+  - Conducting detailed **vulnerability scanning** for web applications, identifying common security flaws.
+
+- **🗄️ SQL Servers (Ports 1433/3306)**:
+  - Detection of exposure risks in **SQL databases**, ensuring proper security measures are in place.
+
+- **💻 RDP (Port 3389)**:
+  - Running security checks on **Remote Desktop Protocol** (RDP) to uncover potential vulnerabilities.
+
+### 🛠️ Active Directory Integration
+
+Enhancements to Active Directory integration allow for a deeper assessment of directory services:
+
+- **🔍 LDAP Protocol Assessment**:
+  - Evaluating LDAP for security best practices and identifying weaknesses.
+
+- **🎟️ Kerberos Security Evaluation**:
+  - Conducting assessments on **Kerberos** configurations to ensure secure authentication mechanisms.
+
+- **🔑 Domain Authentication Mechanisms**:
+  - Analyzing and testing the various domain authentication methods in use.
+
+### 🧰 Metasploit Integration
+
+With the integration of Metasploit, users can now access an extended range of testing modules:
+
+- **📜 Expanded Metasploit Menu**:
+  - Includes modules for multiple protocols beyond SMB, enhancing flexibility.
+
+- **🌐 Web Vulnerability Scanning**:
+  - Utilizing Metasploit to identify vulnerabilities within web applications effectively.
+
+- **💾 Database Login Testing**:
+  - Assessing security around database logins, helping to secure sensitive information.
+
+- **🔐 SSH Login Testing**:
+  - Testing SSH login vulnerabilities to ensure robust access controls.
+
+### ⚙️ Nmap Scanning
+
+Our integration with Nmap allows for comprehensive scanning capabilities:
+
+- **🔍 Protocol-Agnostic Scanning**:
+  - Scans for vulnerabilities across many services, regardless of protocol, providing an all-encompassing security assessment.
+
+---
+
 <p align="center">
 ⚠️ Disclaimer
 
