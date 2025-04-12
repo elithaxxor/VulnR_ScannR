@@ -1,4 +1,4 @@
-# 🌐 VulnR_ScannR: An Advanced Vulnerability Scanner & Grader 
+# 🌐 VulnR_ScannR: An Advanced Vulnerability Scanner & Grader V1.2 
 
 ## 📖 Introduction
 
@@ -129,8 +129,7 @@ Contributions to VulnR_ScannR are highly encouraged! If you would like to enhanc
 - Feel free to customize any sections further to better match your tool's features and purpose!
 ```
 
-### CHANGELOG 
-
+### CHANGELOG - Change Log V1,2
 
 # 📜 CHANGELOG
 
