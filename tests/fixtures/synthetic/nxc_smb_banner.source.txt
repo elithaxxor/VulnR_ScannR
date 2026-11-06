@@ -1,0 +1,18 @@
+Provenance: SYNTHETIC, source-derived. Not captured from a real NetExec run.
+
+The banner lines in *.nxc.txt were written by hand to match the format string in
+NetExec's SMB host banner (print_host_info):
+
+  https://github.com/Pennyw0rth/NetExec/blob/841d7fe22297a9c5789558708661430eca032766/nxc/protocols/smb.py#L319-L326
+
+  "{server_os}{ x<arch>} (name:{hostname}) (domain:{domain}) ({signing}) ({smbv1}){ntlm}{null_auth}{guest}{isdc}"
+  with signing  -> "signing:<True|False>", smbv1 -> "SMBv1:<True|False>",
+  optional " (NTLM:False)", " (Null Auth:True)", " (Guest Auth:True)", " (DC:True)".
+  The fields are coloured with termcolor, so the coloured fixture has ANSI codes.
+
+The "SMB  <ip>  445  <name>  [*]" prefix follows NetExec's logger layout but has
+NOT been checked against a real run. Replace with real captures from
+tests/fixtures/lab_captured/ once a lab run is available.
+
+smbclient_list.smbclient.txt follows the documented `-g|--grepable` format
+(https://www.samba.org/samba/docs/current/man-html/smbclient.1.html); also synthetic.

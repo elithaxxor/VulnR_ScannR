@@ -19,6 +19,7 @@ from typing import Any
 from vulnr_scannr import __version__
 from vulnr_scannr.db import DEFAULT_DB, EXPORT_TABLES
 from vulnr_scannr.tools import KNOWN_TOOLS, ToolNotFoundError
+from vulnr_scannr.ui import Style, phase
 from vulnr_scannr.validation import DEFAULT_MAX_ADDRESSES, ValidationError
 
 EXIT_OK, EXIT_ERROR, EXIT_USAGE, EXIT_MISSING_TOOL = 0, 1, 2, 3
@@ -71,19 +72,19 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("target")
     s.add_argument("--level", type=int, choices=[1, 2, 3], default=1, help="1=shares 2=+users 3=+sessions/access")
     s.add_argument("--username", default="", help="optional user (password is prompted, or VULNR_SMB_PASSWORD)")
-    s.add_argument("--domain", default="")
+    s.add_argument("--domain", default="", help="optional SMB domain/workgroup")
 
     s = sub.add_parser("nmap", help="nmap service/version scan with optional safe NSE categories")
     s.add_argument("targets", nargs="+", help="hosts/CIDRs (space or comma separated)")
     s.add_argument("--scripts", help="NSE categories: default,safe,discovery,version,vuln")
     s.add_argument("--ports", default=None, help="port list (default: common service ports)")
-    s.add_argument("--workers", type=int, default=4)
-    s.add_argument("--output-dir", default="nmap_results")
+    s.add_argument("--workers", type=int, default=4, help="parallel nmap processes (1-16, default 4)")
+    s.add_argument("--output-dir", default="nmap_results", help="directory for nmap XML files")
     s.add_argument("-o", "--output", help="write findings JSON")
 
     s = sub.add_parser("metasploit", help="run one allowlisted Metasploit auxiliary scanner module")
     s.add_argument("target")
-    s.add_argument("--module", required=True, help="module key, see --list-modules")
+    s.add_argument("--module", required=True, help="module key (see the `list-modules` command)")
 
     sub.add_parser("list-modules", help="list allowlisted Metasploit auxiliary modules")
 
@@ -93,19 +94,23 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--nvd", action="store_true", help="look up CVE ids via the NVD 2.0 API (network)")
 
     s = sub.add_parser("export", help="export DB tables to CSV/JSON/XML")
-    s.add_argument("--out-dir", default="exports")
-    s.add_argument("--format", action="append", choices=["csv", "json", "xml"], dest="formats")
-    s.add_argument("--table", action="append", choices=list(EXPORT_TABLES), dest="tables")
+    s.add_argument("--out-dir", default="exports", help="output directory (default: exports)")
+    s.add_argument(
+        "--format", action="append", choices=["csv", "json", "xml"], dest="formats", help="repeatable; default: all"
+    )
+    s.add_argument(
+        "--table", action="append", choices=list(EXPORT_TABLES), dest="tables", help="repeatable; default: all"
+    )
 
     s = sub.add_parser("report", help="render HTML report (and optional PNG chart)")
-    s.add_argument("--html", default="reports/report.html")
+    s.add_argument("--html", default="reports/report.html", help="HTML output path")
     s.add_argument("--plot", action="store_true", help="also write a PNG chart (needs [plot] extra)")
 
     s = sub.add_parser("scan", help="full workflow: discover, enumerate, nmap, score, export")
     _add_scan_args(s)
 
     s = sub.add_parser("schedule", help="run the full workflow daily/weekly (foreground)")
-    _add_scan_args(s)
+    _add_scan_args(s, "accepted for compatibility; scheduled runs always write exports and the HTML report")
     s.add_argument("--frequency", choices=["daily", "weekly"], required=True)
     s.add_argument("--time", default="03:00", help="HH:MM (default 03:00; weekly runs Monday)")
 
@@ -113,11 +118,13 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _add_scan_args(s: argparse.ArgumentParser) -> None:
+def _add_scan_args(
+    s: argparse.ArgumentParser, report_help: str = "write exports/ and reports/report.html when done"
+) -> None:
     s.add_argument("network")
     s.add_argument("--scripts", default="default,safe", help="NSE categories (default: default,safe)")
-    s.add_argument("--no-cvss", action="store_true")
-    s.add_argument("--report", action="store_true", help="write HTML report and exports when done")
+    s.add_argument("--no-cvss", action="store_true", help="legacy scoring without CVSS weighting")
+    s.add_argument("--report", action="store_true", help=report_help)
 
 
 # --------------------------------------------------------------------------- helpers
@@ -163,30 +170,41 @@ def run_workflow(network: str, db: Any, scripts: str | None, use_cvss: bool, rep
     from vulnr_scannr.validation import validate_network
 
     network = validate_network(network, max_addresses)
+    total = 5 if report else 4
     findings: dict[str, dict[str, Any]] = {}
+    log.info(phase(1, total, f"Discovering SMB hosts in {network}"))
     hosts = nmap.discover_smb_hosts(network)
     if not hosts:
         log.warning("No SMB hosts discovered in %s.", network)
         return {}
+    log.info(phase(2, total, f"Enumerating {len(hosts)} SMB host(s)"))
     _merge(findings, smb.enumerate_lan_hosts(hosts))
+    log.info(phase(3, total, f"nmap service scan of {len(hosts)} host(s)"))
     _merge(findings, nmap.run_parallel_scans(hosts, db, scripts=scripts))
+    log.info(phase(4, total, f"Scoring {len(findings)} host(s)"))
     summary = scoring.score_hosts(findings, db, use_cvss=use_cvss)
     if report:
+        log.info(phase(5, total, "Writing exports and HTML report"))
         export.export_tables(db)
         export.render_html_report(db)
     return summary
 
 
 def _print_summary(summary: dict[str, dict[str, Any]]) -> None:
+    st = Style(sys.stdout)
     if not summary:
         print("No hosts scored.")
         return
-    print(f"{'HOST':<40} {'SCORE':>5}  RISK")
+    print(st.header(f"{'HOST':<40} {'SCORE':>5}  RISK"))
     for host, s in sorted(summary.items(), key=lambda kv: kv[1]["score"]):
-        print(f"{host:<40} {s['score']:>5}  {s['category']}")
+        print(f"{host:<40} {s['score']:>5}  {st.risk(s['category'])}")
 
 
 # --------------------------------------------------------------------------- main
+def _err(msg: str) -> None:
+    print(Style(sys.stderr).error("error: ") + msg, file=sys.stderr)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -209,19 +227,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         db = Database(args.db)
     except Exception as exc:  # noqa: BLE001
-        print(f"error: cannot open database {args.db}: {exc}", file=sys.stderr)
+        _err(f"cannot open database {args.db}: {exc}")
         return EXIT_ERROR
     setup_logging(db, args.verbose, args.quiet)
     try:
         return _dispatch(args, db)
     except ValidationError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        _err(str(exc))
         return EXIT_USAGE
     except ToolNotFoundError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        _err(f"{exc}\nRun `vulnr-scannr check-deps` to see which tools are available.")
         return EXIT_MISSING_TOOL
     except (OSError, ValueError, json.JSONDecodeError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        _err(str(exc))
         return EXIT_ERROR
     except KeyboardInterrupt:
         print("\ninterrupted", file=sys.stderr)
@@ -236,13 +254,15 @@ def _dispatch_offline(args: argparse.Namespace) -> int:
             print(f"{k:<16} {v}")
         return EXIT_OK
     status = check_deps()
-    print("External tools:")
+    st = Style(sys.stdout)
+    print(st.header("External tools:"))
     for name, path in status["tools"].items():
         alts = "/".join(KNOWN_TOOLS[name])
-        print(f"  {'OK ' if path else '-- '} {name:<12} {path or 'not found (' + alts + ')'}")
-    print("Optional Python packages:")
+        mark = st.ok("OK ") if path else st.warn("-- ")
+        print(f"  {mark} {name:<12} {path or 'not found (' + alts + ')'}")
+    print(st.header("Optional Python packages:"))
     for name, ok in status["python"].items():
-        print(f"  {'OK ' if ok else '-- '} {name}")
+        print(f"  {st.ok('OK ') if ok else st.warn('-- ')} {name}")
     return EXIT_OK
 
 
