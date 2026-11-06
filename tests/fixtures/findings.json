@@ -1,0 +1,5 @@
+{
+  "192.168.56.10": {"vulnerabilities": ["MS17-010", "SMB Signing Disabled"], "open_ports": [139, 445],
+                     "plaintext_creds": 0, "missing_patches": 1},
+  "192.168.56.11": {"vulnerabilities": [], "open_ports": [22], "plaintext_creds": 0, "missing_patches": 0}
+}

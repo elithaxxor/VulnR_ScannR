@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+# scanner output - may contain sensitive data about scanned networks
+*.db
+*.db-journal
+exports/
+reports/
+nmap_results/
+nmap_results_*.xml
+*.png
+!docs/**/*.png

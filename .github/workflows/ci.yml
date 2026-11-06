@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main_pi]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - name: Bandit (static security check)
+        run: bandit -q -r src -ll
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev,all]"
+      - run: python -m compileall -q src main.py Vuln_Scan_II tests
+      - run: pytest --cov=vulnr_scannr --cov-report=term-missing
+      - name: Smoke test entry points (no scanning)
+        run: |
+          vulnr-scannr --version
+          vulnr-scannr --help
+          vulnr-scannr check-deps
+          python main.py --version
+          python Vuln_Scan_II/modular_version/main.py --version
+          python Vuln_Scan_II/single_liner/main.py --version
+
+  core-only:
+    # The core must work without any optional extras installed.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - run: pip install . pytest
+      - run: pytest -q
+
+  build-and-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: pip install build pip-audit
+      - run: python -m build
+      - name: Dependency audit (runtime + extras)
+        run: |
+          python -m venv /tmp/audit
+          /tmp/audit/bin/pip install --upgrade pip
+          /tmp/audit/bin/pip install "$(ls dist/*.whl)[all]"
+          pip-audit --path /tmp/audit/lib/python3.13/site-packages
