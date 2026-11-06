@@ -1,0 +1,6 @@
+# Nmap 7.95 scan initiated as: nmap -p 139,445 --open -n -T4 -oG - 192.168.56.0/24
+Host: 192.168.56.10 ()	Status: Up
+Host: 192.168.56.10 ()	Ports: 139/open/tcp//netbios-ssn///, 445/open/tcp//microsoft-ds///
+Host: 192.168.56.2 ()	Ports: 445/open/tcp//microsoft-ds///
+Host: 192.168.56.20 ()	Ports: 22/open/tcp//ssh///
+# Nmap done -- 256 IP addresses (3 hosts up) scanned in 2.10 seconds

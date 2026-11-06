@@ -1,214 +1,146 @@
-# 🌐 VulnR_ScannR: An Advanced Vulnerability Scanner & Grader V1.2 
+# VulnR_ScannR
 
-## 📖 Introduction
+**VulnR_ScannR** is a Python command-line tool for running *authorized* SMB and network exposure assessments.
+It drives standard tools (nmap, smbclient, NetExec, and optionally impacket and Metasploit auxiliary scanners),
+scores each host's exposure from 0 to 100, suggests fixes, and writes CSV, JSON, XML and HTML reports.
+Results are stored in SQLite (`smb_enum.db`, which uses the same schema as earlier versions).
 
-**VulnR_ScannR** is a sophisticated Python-based vulnerability scanning tool designed to identify security weaknesses in systems and applications. With a focus on user-friendliness and comprehensive reporting, this tool aims to empower security professionals and enthusiasts to enhance their security posture effectively.
+> ⚠️ **Authorized use only.** Only scan systems you own or have written permission to test.
+> Network commands refuse to run unless you pass `--authorized`. Unauthorized scanning may be illegal.
 
----
+Version 2.0 rebuilds the project as an installable package. The old scripts are summarized in
+[docs/MIGRATION.md](docs/MIGRATION.md).
 
-## 🚀 Features
+## Features
 
-- **🔍 In-Depth Scanning**: Analyze applications and systems for known vulnerabilities.
-- **📊 Comprehensive Reports**: Generate detailed reports summarizing findings, including severity levels and mitigation recommendations.
-- **⚙️ Modular Design**: Easily extendable framework for integrating new scanning techniques and modules.
-- **🌟 User-Friendly Interface**: Intuitive command-line interface that simplifies the scanning process.
-- **📈 Data Visualization**: Visual outputs to help interpret vulnerability data quickly.
+| Area | What it does |
+|---|---|
+| Discovery | Finds hosts with SMB (139/445) open in a CIDR (`nmap -oG`) |
+| SMB enumeration | Anonymous/null-session checks with `smbclient`, NetExec (`nxc`; CrackMapExec is used if it is the only one installed), `impacket-lookupsid`, `enum4linux(-ng)` and `rpcclient`. Flags *SMB signing not required* and *SMBv1* |
+| Intensity enumeration | impacket levels 1–3: shares → logged-on users → sessions and share readability (`[smb]` extra) |
+| Nmap | Parallel `-sV` scans of common service ports, with optional NSE categories limited to `default,safe,discovery,version,vuln`. XML output is parsed into findings |
+| Metasploit | Runs one **allowlisted auxiliary scanner** module, only when you ask for it (`list-modules`) |
+| Scoring | Starts at 100 and subtracts penalties for findings, open and high-risk ports, credentials, missing patches and CVSS. Risk levels are Low, Medium, High and Critical. Optional CVE→CVSS lookup via the NVD 2.0 API (`--nvd`) |
+| Remediation | Fix advice for each finding, with reference links |
+| Reporting | CSV/JSON/XML export (stdlib), a static HTML report, and an optional PNG chart (`[plot]` extra) |
+| Scheduling | Runs the full workflow daily or weekly in the foreground |
+| UI | Subcommand CLI, plus an interactive `menu` that keeps the old menu-driven workflow |
 
----
-```markdown
-## 🛠️ Installation
+## Requirements
 
-### Prerequisites
+* Python **3.11+** (tested on 3.11, 3.12, 3.13 and 3.14)
+* Linux or macOS. Install the external tools you want with your OS package manager. The tool never installs anything by itself:
+  * [nmap](https://nmap.org/), needed for discovery, `nmap` and `scan`
+  * Samba client tools (`smbclient`, `rpcclient`), [NetExec](https://github.com/Pennyw0rth/NetExec),
+    [enum4linux-ng](https://github.com/cddmp/enum4linux-ng): optional; any that are missing are skipped
+  * Metasploit Framework (`msfconsole`): optional
+* Optional Python extras: `smb` ([impacket](https://github.com/fortra/impacket)) and `plot` (matplotlib)
 
-- Python 3.6 or newer
-- Pip (Python package installer)
+Run `vulnr-scannr check-deps` to see what is available.
 
-### Installation Steps
+## Installation
 
-1. **Clone the Repository**:
-   ```bash
-   git clone https://github.com/elithaxxor/VulnR_ScannR.git
-   cd VulnR_ScannR
-   ```
-
-2. **Install Required Packages**:
-   Install the necessary dependencies via pip:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Run the Scanner**:
-   Execute the main scanning script to start analyzing your target:
-   ```bash
-   python main.py --target <target_ip_or_url>
-   ```
-
----
-
-## 👩‍💻 Usage
-
-To utilize VulnR_ScannR, follow these steps:
-
-### Step 1: Configure Your Environment
-
-Before running the scanner, edit the configuration file `config.yaml` to adjust parameters such as scan depth and output preferences.
-
-### Step 2: Launch the Scan
-
-Run the scanner by specifying the target you want to analyze:
 ```bash
-python main.py --target <target_ip_or_url>
+git clone https://github.com/elithaxxor/VulnR_ScannR.git
+cd VulnR_ScannR
+python3 -m venv .venv && . .venv/bin/activate
+pip install ".[all]"        # or: pip install .   (core only, no third-party deps)
 ```
 
-### Step 3: Review the Outputs
+`requirements.txt` lists the optional extras for people who prefer `pip install -r requirements.txt`.
 
-Once the scanning process is complete, review the generated reports for a comprehensive overview of identified vulnerabilities.
+## Usage
 
----
+```bash
+vulnr-scannr --help
+vulnr-scannr check-deps
 
-## 📊 Data Flow Overview
+# Full workflow: discover -> enumerate -> nmap -> score (-> export + HTML report)
+vulnr-scannr --authorized scan 192.168.56.0/24 --report
 
-The data flow of VulnR_ScannR can be summarized as follows:
+# Individual steps
+vulnr-scannr --authorized discover 192.168.56.0/24 --enumerate -o findings.json
+vulnr-scannr --authorized nmap 192.168.56.10,192.168.56.11 --scripts safe,vuln -o nmap.json
+vulnr-scannr --authorized smb-intensity 192.168.56.10 --level 3 --username alice --domain LAB
+vulnr-scannr list-modules
+vulnr-scannr --authorized metasploit 192.168.56.10 --module smb_version
+
+# Offline: score findings, export, report
+vulnr-scannr score findings.json            # add --no-cvss for the old modular algorithm, --nvd for CVE lookups
+vulnr-scannr export --format csv --format json
+vulnr-scannr report --plot                  # reports/report.html (+ PNG)
+
+# Scheduled (foreground; stop with Ctrl+C)
+vulnr-scannr --authorized schedule 192.168.56.0/24 --frequency weekly --time 03:00
+
+# Interactive menu (old UI)
+vulnr-scannr menu
+```
+
+The old entry points still work and call the same CLI: `python main.py ...`,
+`python Vuln_Scan_II/modular_version/main.py ...` and `python Vuln_Scan_II/single_liner/main.py ...`.
+You can also use `python -m vulnr_scannr`.
+
+Global options: `--db PATH`, `-v/--verbose`, `-q/--quiet`, and `--max-addresses N` (largest CIDR allowed; default 4096).
+Exit codes: `0` ok, `1` runtime error, `2` usage/validation/authorization error, `3` required tool missing.
+
+**Credentials:** for `smb-intensity`, the password is prompted for without echo, or read from
+`VULNR_SMB_PASSWORD`. Passwords are never put on a command line and are redacted from logs.
+
+**NVD:** `--nvd` sends CVE IDs to `services.nvd.nist.gov`. Set `NVD_API_KEY` for higher rate limits
+([NVD API docs](https://nvd.nist.gov/developers/vulnerabilities)).
+
+## Data flow
 
 ```mermaid
 flowchart TD
-    A[Start] --> B{User Input}
-    B -->|Target URL| C[Initiate Scan]
-    B -->|Configuration| D[Load Config]
-    C --> E[Scan for Vulnerabilities]
-    E --> F[Evaluate and Score Findings]
-    F --> G[Generate Reports]
-    G --> H{Output Options}
-    H -->|Display Report| I[Render Output to Console]
-    H -->|Save to File| J[Generate Report File]
-    I --> K[End]
-    J --> K
+    A[CIDR / targets] --> V{validate + --authorized}
+    V --> D[nmap discovery 139/445]
+    D --> E[SMB anonymous enumeration]
+    D --> N[nmap -sV + safe NSE]
+    E --> F[findings]
+    N --> F
+    F --> S[score + CVSS + remediation]
+    S --> DB[(SQLite)]
+    DB --> X[CSV / JSON / XML export]
+    DB --> H[HTML report / PNG chart]
 ```
 
----
+## Scoring
 
-## 📈 Visual Insights
+The score starts at 100. Each finding costs 15 points, each open port 5, each plaintext or default credential 10,
+each missing patch 5, each high-risk port (21, 22, 23, 25, 53, 139, 445, 1433, 3306, 3389, 5900) another 3,
+and each critical (CVSS ≥ 9) finding another 20. The summed CVSS of all findings is also subtracted
+(unknown findings count as 5.0). The result is floored at 0. Risk levels: ≥80 Low, ≥50 Medium, ≥20 High, otherwise Critical.
 
-The scanner provides visual representations to facilitate understanding of the results. Examples include:
+Example input for `score`:
 
-1. **Vulnerability Severity Distribution**: A bar chart illustrating the quantity of vulnerabilities categorized by severity (Critical, High, Medium, Low).
-
-   ![Vulnerability Severity Distribution](path_to_severity_distribution_chart.png)
-
-2. **Total Vulnerabilities Found**: A pie chart portraying the percentage of detected vulnerabilities.
-
-   ![Total Vulnerabilities Found](path_to_total_vulnerabilities_chart.png)
-
-3. **Trends Over Time**: A line graph demonstrating the number of vulnerabilities discovered in consecutive scans.
-
-   ![Trends Over Time](path_to_trends_over_time_chart.png)
-
----
-
-## 🤝 Contributing
-
-Contributions to VulnR_ScannR are highly encouraged! If you would like to enhance the tool, fix bugs, or add features:
-
-1. **Fork the Repository**.
-2. **Create a New Branch**.
-3. **Make Your Changes**.
-4. **Submit a Pull Request**.
-
----
-
-## 📝 License
-
-@copyleft - see "Disclaimer" below.
----
-
+```json
+{"192.168.56.10": {"vulnerabilities": ["MS17-010"], "open_ports": [139, 445], "plaintext_creds": 0, "missing_patches": 1}}
 ```
 
-### Notes:
-- Replace `path_to_severity_distribution_chart.png`, `path_to_total_vulnerabilities_chart.png`, and `path_to_trends_over_time_chart.png` with the actual paths to your images or charts when you generate them.
-- Update your email and GitHub profile placeholder text with your actual contact information.
-- Feel free to customize any sections further to better match your tool's features and purpose!
+## Development
+
+```bash
+pip install -e ".[dev,all]"
+ruff check . && ruff format --check .
+pytest --cov=vulnr_scannr
+bandit -q -r src -ll
+pip-audit
 ```
 
-### CHANGELOG - Change Log V1,2
+Tests replace every external tool with mocks or offline fixtures. A safety fixture makes any test that tries to launch a
+real scanner fail. To exercise real tools, use an isolated lab network (for example a host-only VM network)
+that you control. Never test against the public internet.
 
-# 📜 CHANGELOG
+## License
 
-## 🚀 New Features in This Release
+This repository has **no license file**. The original README said only "@copyleft my mistakes yours. feel free to
+incorporate it into your work". The owner has not chosen a formal license, so none is added here.
+Until one is, standard copyright applies.
 
-We are excited to announce a host of new features that enhance our tool's capabilities! Below are the details of the newly implemented functionalities, categorized for clarity.
+## Disclaimer
 
-### 🌐 Multi-Protocol Support
-
-Our tool now supports scanning across several protocols, ensuring a comprehensive approach to security assessments:
-
-- **🗂️ FTP (Ports 21)**:
-  - Scanning for vulnerabilities and testing for **anonymous access**.
-  
-- **🔒 SSH (Port 22)**:
-  - Conducting thorough **security assessments** to identify potential weaknesses.
-
-- **📞 Telnet (Port 23)**:
-  - Detection of active **Telnet services**, allowing for better security oversight.
-
-- **✉️ SMTP (Port 25)**:
-  - Enumeration capabilities to help identify and evaluate **email services** and their configurations.
-
-- **🌐 DNS (Port 53)**:
-  - Comprehensive **DNS analysis** for identifying misconfigurations and vulnerabilities.
-
-- **🌍 HTTP/HTTPS (Ports 80/443)**:
-  - Conducting detailed **vulnerability scanning** for web applications, identifying common security flaws.
-
-- **🗄️ SQL Servers (Ports 1433/3306)**:
-  - Detection of exposure risks in **SQL databases**, ensuring proper security measures are in place.
-
-- **💻 RDP (Port 3389)**:
-  - Running security checks on **Remote Desktop Protocol** (RDP) to uncover potential vulnerabilities.
-
-### 🛠️ Active Directory Integration
-
-Enhancements to Active Directory integration allow for a deeper assessment of directory services:
-
-- **🔍 LDAP Protocol Assessment**:
-  - Evaluating LDAP for security best practices and identifying weaknesses.
-
-- **🎟️ Kerberos Security Evaluation**:
-  - Conducting assessments on **Kerberos** configurations to ensure secure authentication mechanisms.
-
-- **🔑 Domain Authentication Mechanisms**:
-  - Analyzing and testing the various domain authentication methods in use.
-
-### 🧰 Metasploit Integration
-
-With the integration of Metasploit, users can now access an extended range of testing modules:
-
-- **📜 Expanded Metasploit Menu**:
-  - Includes modules for multiple protocols beyond SMB, enhancing flexibility.
-
-- **🌐 Web Vulnerability Scanning**:
-  - Utilizing Metasploit to identify vulnerabilities within web applications effectively.
-
-- **💾 Database Login Testing**:
-  - Assessing security around database logins, helping to secure sensitive information.
-
-- **🔐 SSH Login Testing**:
-  - Testing SSH login vulnerabilities to ensure robust access controls.
-
-### ⚙️ Nmap Scanning
-
-Our integration with Nmap allows for comprehensive scanning capabilities:
-
-- **🔍 Protocol-Agnostic Scanning**:
-  - Scans for vulnerabilities across many services, regardless of protocol, providing an all-encompassing security assessment.
-
----
-
-<p align="center">
-⚠️ Disclaimer
-
-This tool is intended for security professionals to perform authorized security assessments only. Unauthorized scanning of networks may violate local, state, and federal laws. The author is not responsible for misuse or damage caused by this tool.
-
-@copyleft my mistakes yours. feel free to incorporate it into your work. however, I'm not responsible for your actions. do not be unethical. do not harm others. do the right thing.
-</p>
-
-</div>
+This tool is meant for security professionals doing authorized assessments. Unauthorized network scanning may
+break local, state and federal laws. The author is not responsible for misuse. Do not be unethical, do not harm others,
+do the right thing.
