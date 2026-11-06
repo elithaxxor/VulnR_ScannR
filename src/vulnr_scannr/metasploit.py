@@ -16,10 +16,14 @@ from vulnr_scannr.validation import ValidationError, validate_target
 
 log = logging.getLogger("vulnr_scannr")
 
+#: Paths verified to exist in rapid7/metasploit-framework at commit
+#: 6962ae62c99a202f2775d977ab8ab7b44121e858 (2026-11-06); see
+#: tests/fixtures/upstream/metasploit.json. ``ftp/anonymous`` from the legacy
+#: menu does not exist there; the module file is ``ftp/ftp_anonymous.rb``.
 ALLOWED_MODULES: dict[str, str] = {
     "smb_version": "auxiliary/scanner/smb/smb_version",
     "smb_ms17_010": "auxiliary/scanner/smb/smb_ms17_010",
-    "ftp_anonymous": "auxiliary/scanner/ftp/anonymous",
+    "ftp_anonymous": "auxiliary/scanner/ftp/ftp_anonymous",
     "ssh_version": "auxiliary/scanner/ssh/ssh_version",
     "http_version": "auxiliary/scanner/http/http_version",
     "mysql_version": "auxiliary/scanner/mysql/mysql_version",

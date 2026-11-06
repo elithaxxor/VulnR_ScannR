@@ -21,7 +21,7 @@ All of that code is still available in git history. v2.0 merges it into `src/vul
 | Menu 1 / `--discover-cidr` SMB discovery + LAN enumeration | `discover NETWORK --enumerate`, part of `scan` |
 | Menu 2 / `--intensity 1-3 --intensity-target` | `smb-intensity TARGET --level 1-3` |
 | Menu 3 / `--run-nmap` advanced parallel nmap | `nmap TARGETS --scripts ... --workers N` |
-| Menu 4 / `--metasploit` menu | `list-modules`, `metasploit TARGET --module KEY` (allowlist) |
+| Menu 4 / `--metasploit` menu | `list-modules`, `metasploit TARGET --module KEY` (allowlist). The legacy `auxiliary/scanner/ftp/anonymous` path does not exist upstream (checked at metasploit-framework `6962ae6`); v2.1 uses `auxiliary/scanner/ftp/ftp_anonymous` |
 | Menu 7 / `--score-json` scoring (modular & enhanced CVSS) | `score FILE` (enhanced by default, `--no-cvss` = modular) |
 | Remediation recommendations | written automatically by `score` / `scan` |
 | Menu 8 export CSV/JSON/XML (pandas) | `export` (stdlib, no pandas) |

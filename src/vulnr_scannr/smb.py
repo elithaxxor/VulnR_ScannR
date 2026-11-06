@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import enum
 import logging
+import re
 from typing import Any
 
 from vulnr_scannr.nmap import empty_host
 from vulnr_scannr.tools import ToolNotFoundError, resolve_tool, run_tool
+from vulnr_scannr.ui import strip_ansi
 from vulnr_scannr.validation import validate_host
 
 log = logging.getLogger("vulnr_scannr")
@@ -55,14 +57,40 @@ def parse_smbclient_shares(output: str) -> list[str]:
     return shares
 
 
+_NXC_FLAG_RE = re.compile(r"\((signing|SMBv1|Null Auth|Guest Auth|NTLM|DC):\s*(True|False)\)", re.IGNORECASE)
+_NXC_FIELD_RE = re.compile(r"\((name|domain):([^)]*)\)")
+
+
 def parse_netexec_info(output: str) -> dict[str, Any]:
-    """Pull signing/SMBv1 flags from a netexec/crackmapexec banner line."""
+    """Parse the NetExec / CrackMapExec SMB host banner.
+
+    NetExec prints ``<os> (name:X) (domain:Y) (signing:<bool>) (SMBv1:<bool>)``
+    optionally followed by ``(NTLM:False)``, ``(Null Auth:True)``,
+    ``(Guest Auth:True)`` and ``(DC:True)`` (see ``print_host_info`` in
+    ``nxc/protocols/smb.py``). Colour codes are stripped first because
+    NetExec colours these fields.
+    """
     info: dict[str, Any] = {}
-    low = output.lower()
-    if "signing:false" in low.replace(" ", ""):
-        info["signing_disabled"] = True
-    if "smbv1:true" in low.replace(" ", ""):
-        info["smbv1"] = True
+    text = strip_ansi(output)
+    for key, value in _NXC_FLAG_RE.findall(text):
+        flag = value.lower() == "true"
+        k = key.lower()
+        if k == "signing":
+            info["signing_required"] = flag
+            if not flag:
+                info["signing_disabled"] = True
+        elif k == "smbv1":
+            info["smbv1"] = flag
+        elif k == "null auth":
+            info["null_auth"] = flag
+        elif k == "guest auth":
+            info["guest_auth"] = flag
+        elif k == "ntlm":
+            info["ntlm"] = flag
+        elif k == "dc":
+            info["is_dc"] = flag
+    for key, value in _NXC_FIELD_RE.findall(text):
+        info[key] = value.strip()
     return info
 
 
@@ -81,13 +109,14 @@ def enumerate_host(ip: str, timeout: float = TOOL_TIMEOUT) -> dict[str, Any]:
         if res.timed_out:
             log.warning("[%s] %s timed out", name, ip)
             continue
-        out = res.stdout.strip()
+        out = strip_ansi(res.stdout).strip()
         if name == "smbclient":
             data["shares"] = parse_smbclient_shares(out)
             if data["shares"]:
                 log.info("[%s] anonymous shares on %s: %s", name, ip, ", ".join(data["shares"]))
         elif name == "netexec":
             flags = parse_netexec_info(out)
+            data["smb_info"] = flags
             if flags.get("signing_disabled"):
                 _add(data, "SMB Signing Disabled")
             if flags.get("smbv1"):
@@ -106,7 +135,11 @@ def _add(data: dict[str, Any], finding: str) -> None:
 
 
 def enumerate_lan_hosts(hosts: list[str]) -> dict[str, dict[str, Any]]:
-    return {h: enumerate_host(h) for h in hosts}
+    results: dict[str, dict[str, Any]] = {}
+    for i, h in enumerate(hosts, 1):
+        log.info("[smb %d/%d] %s", i, len(hosts), h)
+        results[h] = enumerate_host(h)
+    return results
 
 
 # --------------------------------------------------------------------------- impacket

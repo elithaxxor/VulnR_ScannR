@@ -6,7 +6,7 @@ import logging
 import os
 import re
 import xml.etree.ElementTree as ET  # noqa: S405 - parses local nmap output only
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -221,9 +221,10 @@ def run_parallel_scans(
     resolve_tool("nmap")  # fail fast before spawning threads
     merged: dict[str, dict[str, Any]] = {}
     with ThreadPoolExecutor(max_workers=max(1, min(workers, 16))) as pool:
-        futures = [pool.submit(run_scan, t, db, scripts, ports, output_dir, timeout) for t in targets]
-        for fut in futures:
+        futures = {pool.submit(run_scan, t, db, scripts, ports, output_dir, timeout): t for t in targets}
+        for done, fut in enumerate(as_completed(futures), 1):
             merged.update(fut.result())
+            log.info("[nmap %d/%d] finished %s", done, len(futures), futures[fut])
     return merged
 
 

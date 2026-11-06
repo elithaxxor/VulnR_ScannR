@@ -28,7 +28,7 @@ def test_anonymous_commands_reject_injection():
 def test_parsers():
     assert smb.parse_smbclient_shares("Disk|public|x\nIPC|IPC$|ipc\nWorkgroup|WG|") == ["public", "IPC$"]
     flags = smb.parse_netexec_info("SMB 10.0.0.1 445 DC [*] Windows (signing:False) (SMBv1:True)")
-    assert flags == {"signing_disabled": True, "smbv1": True}
+    assert flags["signing_disabled"] is True and flags["smbv1"] is True
 
 
 def test_enumerate_host_with_mocks(monkeypatch):

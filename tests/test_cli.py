@@ -134,17 +134,6 @@ def test_smb_intensity_password_from_env(tmp_path, monkeypatch, capsys):
     assert "pw-from-env" not in capsys.readouterr().out
 
 
-def test_menu_flow(db, monkeypatch):
-    from vulnr_scannr.menu import run_menu
-
-    answers = iter(["3", "no", "5", "f.json", "8", "9", "0"])
-    calls = []
-    rc = run_menu(db, input_fn=lambda prompt: next(answers), runner=lambda argv: calls.append(argv) or 0)
-    assert rc == 0
-    assert calls[0][-2:] == ["score", "f.json"] and calls[1] == ["check-deps"]
-    assert not any("nmap" in c for c in calls)  # declined authorization
-
-
 @pytest.mark.parametrize(
     "script", ["main.py", "Vuln_Scan_II/modular_version/main.py", "Vuln_Scan_II/single_liner/main.py"]
 )

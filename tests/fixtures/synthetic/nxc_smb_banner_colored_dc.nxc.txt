@@ -1,0 +1,1 @@
+SMB         192.168.56.20   445    LABDC01          [*] Windows Server 2022 Build 20348 x64 (name:LABDC01) (domain:lab.local) ([1m[32msigning:True[0m) ([1m[33mSMBv1:False[0m) ([1m[33mNTLM:False[0m) (DC:True)

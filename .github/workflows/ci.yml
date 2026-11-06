@@ -52,6 +52,9 @@ jobs:
           python main.py --version
           python Vuln_Scan_II/modular_version/main.py --version
           python Vuln_Scan_II/single_liner/main.py --version
+          python scripts/lab_validate.py flags
+          python scripts/lab_validate.py replay tests/fixtures
+          NO_COLOR=1 vulnr-scannr menu < /dev/null
 
   core-only:
     # The core must work without any optional extras installed.
@@ -73,6 +76,10 @@ jobs:
           python-version: "3.13"
       - run: pip install build pip-audit
       - run: python -m build
+      - name: LICENSE is packaged
+        run: |
+          unzip -l dist/*.whl | grep -q 'licenses/LICENSE'
+          tar -tzf dist/*.tar.gz | grep -q '/LICENSE$'
       - name: Dependency audit (runtime + extras)
         run: |
           python -m venv /tmp/audit

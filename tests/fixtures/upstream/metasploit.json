@@ -1,0 +1,21 @@
+{
+  "provenance": "Verified 2026-11-06 via the GitHub contents API and raw source of rapid7/metasploit-framework",
+  "repository": "https://github.com/rapid7/metasploit-framework",
+  "commit": "6962ae62c99a202f2775d977ab8ab7b44121e858",
+  "module_files_found": [
+    "modules/auxiliary/scanner/smb/smb_version.rb",
+    "modules/auxiliary/scanner/smb/smb_ms17_010.rb",
+    "modules/auxiliary/scanner/ftp/ftp_anonymous.rb",
+    "modules/auxiliary/scanner/ssh/ssh_version.rb",
+    "modules/auxiliary/scanner/http/http_version.rb",
+    "modules/auxiliary/scanner/mysql/mysql_version.rb",
+    "modules/auxiliary/scanner/mssql/mssql_ping.rb",
+    "modules/auxiliary/scanner/rdp/rdp_scanner.rb"
+  ],
+  "module_files_not_found": ["modules/auxiliary/scanner/ftp/anonymous.rb"],
+  "msfconsole_flags": {
+    "-q": "lib/metasploit/framework/parsed_options/console.rb ('-q', '--quiet')",
+    "-x": "lib/metasploit/framework/parsed_options/console.rb ('-x', '--execute-command COMMAND')",
+    "-n": "lib/metasploit/framework/parsed_options/base.rb ('-n', '--no-database')"
+  }
+}

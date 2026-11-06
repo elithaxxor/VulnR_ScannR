@@ -77,6 +77,21 @@ vulnr-scannr --authorized schedule 192.168.56.0/24 --frequency weekly --time 03:
 vulnr-scannr menu
 ```
 
+### Interactive menu
+
+`vulnr-scannr menu` (or `python main.py menu`) offers the same workflows with prompts:
+
+* a header showing the database and whether `--authorized` was given; network options (1–4) ask for
+  confirmation unless it was, and declining scans nothing
+* options whose tool or Python extra is missing are flagged, e.g. `(needs nmap - not installed)`, and are not run
+* every input is validated on entry (CIDR size, IPs, intensity, module allowlist, file exists), with up to 3 tries
+* Ctrl+C or Ctrl+D at a prompt returns to the menu; at the main prompt it exits cleanly
+* a plain-language result after each action (`Done.`, missing tool, input/authorization problem)
+
+Colour is used only on a terminal. Set `NO_COLOR=1` to turn it off, or `FORCE_COLOR=1` to force it. Output sent to a
+pipe or file never contains escape codes. Long runs print phase progress such as `[2/5] Enumerating 3 SMB host(s)`,
+`[smb 1/3] 192.168.56.10` and `[nmap 2/3] finished 192.168.56.11`. These are counts, not time estimates.
+
 The old entry points still work and call the same CLI: `python main.py ...`,
 `python Vuln_Scan_II/modular_version/main.py ...` and `python Vuln_Scan_II/single_liner/main.py ...`.
 You can also use `python -m vulnr_scannr`.
@@ -119,6 +134,13 @@ Example input for `score`:
 {"192.168.56.10": {"vulnerabilities": ["MS17-010"], "open_ports": [139, 445], "plaintext_creds": 0, "missing_patches": 1}}
 ```
 
+## Lab validation
+
+The tool integrations (NetExec banner parsing, enum4linux-ng/Samba flags, impacket RPC, Metasploit modules) are covered
+by offline contract tests. They still need checking against real tools in an isolated lab. See
+[docs/LAB_TESTING.md](docs/LAB_TESTING.md) and `scripts/lab_validate.py` (`flags` and `replay` run offline; `capture`
+works only against a single private lab IP and requires `--authorized`).
+
 ## Development
 
 ```bash
@@ -135,9 +157,13 @@ that you control. Never test against the public internet.
 
 ## License
 
-This repository has **no license file**. The original README said only "@copyleft my mistakes yours. feel free to
-incorporate it into your work". The owner has not chosen a formal license, so none is added here.
-Until one is, standard copyright applies.
+Released under the [MIT License](LICENSE). Copyright (c) 2026 elithaxxor.
+
+Why MIT: the earliest README (commits `c485671` and `162cff2`, April 2025) said the project was
+"available under the MIT License", but no LICENSE file was ever added. The later "@copyleft ... feel free to
+incorporate it into your work" note is also permissive in spirit. Every commit in the history is by the
+repository owner, and no third-party license notices were found in the code. This was a check of the
+repository history, not a full legal audit.
 
 ## Disclaimer
 
